@@ -4,13 +4,22 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    :root{--mint:#A8DDD3;--mint2:#78BDB0;--bg:#F7FBFA;--ink:#24413C;--muted:#6C817C;--card:#fff}
-    *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--ink)}
-    .app{max-width:520px;margin:auto;padding:24px 18px 100px}
-    .brand{font-size:30px;font-weight:700}.quote{color:var(--muted);margin:10px 0 24px;line-height:1.4}
-    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:var(--card);border-radius:20px;padding:16px;box-shadow:0 8px 24px rgba(36,65,60,.08)}
-    .label{font-size:12px;color:var(--muted)}.value{font-weight:700;margin-top:6px}.big{width:100%;border:0;border-radius:18px;padding:18px;font-size:17px;font-weight:700;cursor:pointer}
-    .voice{background:var(--mint);color:var(--ink);margin-top:16px}.secondary{background:#fff;color:var(--ink);border:1px solid #dce8e5;margin-top:10px}
+    :root{--mint:#A8DDD3;--mint2:#78BDB0;--mint3:#DFF3EF;--bg:#F7FBFA;--ink:#24413C;--muted:#6C817C;--card:#fff;--line:#DDEBE7}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(180deg,#F4FBF9 0%,#F9FCFB 52%,#F7FBFA 100%);color:var(--ink)}
+    .app{max-width:520px;margin:auto;padding:22px 18px 110px}
+    .hero{position:relative;overflow:hidden;background:linear-gradient(145deg,#EAF8F5,#D8F0EB);border:1px solid #D7EBE6;border-radius:28px;padding:22px 20px 20px;margin-bottom:16px;box-shadow:0 12px 34px rgba(36,65,60,.07)}
+    .hero:after{content:"";position:absolute;width:120px;height:120px;border-radius:50%;right:-32px;top:-38px;border:16px solid rgba(120,189,176,.14);box-shadow:0 0 0 10px rgba(255,255,255,.22) inset}
+    .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#66837C;font-weight:700;margin-bottom:8px}
+    .brand{font-size:34px;line-height:1;font-weight:750;letter-spacing:-.035em}
+    .month{font-size:14px;color:#52736B;margin-top:7px;font-weight:650}
+    .quote{position:relative;z-index:1;color:#55726B;margin:18px 0 0;line-height:1.5;font-size:15px;max-width:360px}
+    .music-mark{position:absolute;right:24px;bottom:16px;font-size:22px;opacity:.35}
+    .section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#79918B;font-weight:700;margin:28px 2px 9px}
+    .footer-note{text-align:center;color:#8AA09A;font-size:11px;margin:26px 0 4px;letter-spacing:.04em}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:rgba(255,255,255,.96);border:1px solid #E4EFEC;border-radius:20px;padding:16px;box-shadow:0 8px 24px rgba(36,65,60,.06)}
+    .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#78908A}.value{font-weight:750;margin-top:7px;letter-spacing:-.02em}.big{width:100%;border:0;border-radius:18px;padding:18px;font-size:17px;font-weight:750;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.big:active{transform:scale(.985)}
+    .voice{background:linear-gradient(135deg,#A8DDD3,#96D2C6);color:var(--ink);margin-top:16px;box-shadow:0 10px 24px rgba(120,189,176,.18)}.secondary{background:#fff;color:var(--ink);border:1px solid #dce8e5;margin-top:10px}
     h2{font-size:18px;margin-top:28px}.mov{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #edf2f0}.mov:last-child{border-bottom:0}
     .sub{font-size:12px;color:var(--muted);margin-top:3px}.sheet{position:fixed;inset:0;background:#0004;display:none;align-items:flex-end;justify-content:center}.sheet.show{display:flex}
     .panel{width:100%;max-width:520px;max-height:94vh;overflow:auto;background:var(--bg);border-radius:26px 26px 0 0;padding:20px}.head{display:flex;justify-content:space-between;align-items:center}
@@ -60,10 +69,21 @@ google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.mes
 function init(d){DATA=d;render();hydrate();handleVoiceReturn()}
 function render(){
  const r=DATA.resumen||{ingresos:0,gastos:0,disponible:0};
- app.innerHTML='<div class="brand">Clari</div><div class="quote">'+esc(DATA.frase||'Hoy también cuenta.')+'</div>'+
+ const mes=nombreMesActual();
+ app.innerHTML=
+ '<div class="hero">'+
+   '<div class="eyebrow">Lado A · Tus finanzas</div>'+
+   '<div class="brand">Clari</div>'+
+   '<div class="month">'+esc(mes)+'</div>'+
+   '<div class="quote">“'+esc(DATA.frase||'Hoy también cuenta.')+'”</div>'+
+   '<div class="music-mark">♪</div>'+
+ '</div>'+
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
- '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
+ '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
+ '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
+ '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
+ '<div class="footer-note">hecho para Clari · con ritmo y claridad</div>';
 }
 
 function openResumen(){
@@ -402,6 +422,10 @@ function detectarConcepto(t,cat,cuentaDetectada){
 }
 
 function openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
+function nombreMesActual(){
+  const s=new Intl.DateTimeFormat('es-AR',{month:'long',year:'numeric'}).format(new Date());
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
 function money(v){return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(v||0))}
 function parseMoney(v){let s=String(v||'').replace(/[^\d,.-]/g,'');if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return Number(s.replace(',','.'))||0}
 function today(){let d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
