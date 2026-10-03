@@ -63,6 +63,72 @@ function guardarMovimiento(payload) {
   return { ok: true, id, resumen: getResumenMes_(), ultimos: getUltimosMovimientos_(6) };
 }
 
+
+function actualizarMovimiento(payload) {
+  validarMovimiento_(payload);
+  if (!payload.id) throw new Error('Falta el ID del movimiento.');
+
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const row = buscarFilaMovimiento_(payload.id);
+  if (!row) throw new Error('No encontré el movimiento a editar.');
+
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const fecha = payload.fecha ? new Date(payload.fecha + 'T12:00:00') : now;
+
+  const creadoEn = sh.getRange(row, 16).getValue();
+  const origenActual = sh.getRange(row, 14).getDisplayValue();
+  const textoOriginalActual = sh.getRange(row, 15).getDisplayValue();
+
+  sh.getRange(row, 1, 1, 17).setValues([[
+    String(payload.id),
+    Utilities.formatDate(fecha, tz, 'dd/MM/yyyy'),
+    Utilities.formatDate(now, tz, 'HH:mm:ss'),
+    String(payload.tipo || '').toUpperCase(),
+    Number(payload.monto),
+    String(payload.concepto || '').trim(),
+    String(payload.categoria || '').trim(),
+    String(payload.cuenta || '').trim(),
+    String(payload.medioPago || '').trim(),
+    String(payload.instrumento || '').trim(),
+    String(payload.tipoGasto || '').trim().toUpperCase(),
+    String(payload.beneficiario || '').trim(),
+    String(payload.nota || '').trim(),
+    origenActual || String(payload.origen || 'MANUAL').toUpperCase(),
+    textoOriginalActual || String(payload.textoOriginal || '').trim(),
+    creadoEn || now,
+    now
+  ]]);
+
+  return { ok: true, id: payload.id, resumen: getResumenMes_(), ultimos: getUltimosMovimientos_(6) };
+}
+
+function eliminarMovimiento(id) {
+  if (!id) throw new Error('Falta el ID del movimiento.');
+
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const row = buscarFilaMovimiento_(id);
+  if (!row) throw new Error('No encontré el movimiento a eliminar.');
+
+  sh.deleteRow(row);
+
+  return { ok: true, id, resumen: getResumenMes_(), ultimos: getUltimosMovimientos_(6) };
+}
+
+function buscarFilaMovimiento_(id) {
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) return 0;
+
+  const ids = sh.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
+  const target = String(id).trim();
+
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === target) return i + 2;
+  }
+  return 0;
+}
+
 function getConfig_() {
   const out = {};
   readObjects_(CLARI.SHEETS.CONFIG).forEach(r => { if (r.CLAVE) out[String(r.CLAVE)] = r.VALOR; });
