@@ -266,6 +266,13 @@ function handleVoiceReturn(){
   google.script.url.getLocation(function(location){
     const text=(location && location.parameter && location.parameter.voice) ? location.parameter.voice : '';
     if(!text) return;
+
+    const key='clari_voice_consumed';
+    const fingerprint=text+'|'+((location && location.parameters && location.parameters.voice_ts && location.parameters.voice_ts[0]) || '');
+
+    if(sessionStorage.getItem(key)===fingerprint) return;
+
+    sessionStorage.setItem(key,fingerprint);
     voiceRaw=text;
     pasarVoz();
   });
