@@ -18,7 +18,7 @@
     .seg button{border:0;background:transparent;padding:11px;border-radius:10px;font-weight:700}.seg .on{background:#fff}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 4px}
     input,select,textarea{width:100%;padding:13px;border:1px solid #dce8e5;border-radius:14px;background:#fff;font-size:16px}.save{background:var(--mint2);color:white;margin-top:8px}
     .mic{display:block;margin:28px auto 14px;width:90px;height:90px;border:0;border-radius:50%;font-size:34px;background:var(--mint)}.voiceText{text-align:center;min-height:54px;line-height:1.4}
-    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
+    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.summary-link{margin-top:14px;text-align:center}.summary-link button{border:0;background:transparent;color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center}.bar-name{font-size:13px}.bar-track{height:10px;background:#E7F1EF;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:var(--mint2);border-radius:99px}.bar-value{font-size:12px;font-weight:700}.summary-section{margin-top:18px}.summary-section h3{font-size:15px;margin:0 0 10px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pill-card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(36,65,60,.06)}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
   </style>
 </head>
 <body>
@@ -47,6 +47,11 @@
   <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
 </div></div>
 
+<div class="sheet" id="summarySheet"><div class="panel">
+  <div class="head"><h2>Resumen del mes</h2><button class="close" onclick="closeSheet('summarySheet')">×</button></div>
+  <div id="summaryContent"></div>
+</div></div>
+
 <div class="notice" id="notice"></div>
 <script>
 let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null;
@@ -58,8 +63,62 @@ function render(){
  app.innerHTML='<div class="brand">Clari</div><div class="quote">'+esc(DATA.frase||'Hoy también cuenta.')+'</div>'+
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
- '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
+ '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
 }
+
+function openResumen(){
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumenDetallado=r;
+      renderResumen();
+      openSheet('summarySheet');
+    })
+    .withFailureHandler(x=>toast(x.message||x))
+    .getResumenDetallado_();
+}
+
+function renderResumen(){
+  const r=DATA.resumenDetallado||{
+    ingresos:0,gastos:0,disponible:0,categorias:[],beneficiarios:[],
+    tipoGasto:{FIJO:0,VARIABLE:0},gastosMesAnterior:0,variacionVsAnterior:null
+  };
+
+  const maxCat=Math.max(1,...(r.categorias||[]).map(x=>Number(x.monto||0)));
+  const cats=(r.categorias||[]).length
+    ? '<div class="bars">'+r.categorias.slice(0,6).map(x=>barRow(x.nombre,x.monto,maxCat)).join('')+'</div>'
+    : '<div class="sub">Todavía no hay gastos este mes.</div>';
+
+  const fijo=Number((r.tipoGasto||{}).FIJO||0);
+  const variable=Number((r.tipoGasto||{}).VARIABLE||0);
+  const ben=(r.beneficiarios||[]);
+
+  let comp='Sin datos del mes anterior.';
+  if(r.gastosMesAnterior>0 && r.variacionVsAnterior!==null){
+    const v=Number(r.variacionVsAnterior);
+    comp=(v>=0?'Gastaste ':'Gastaste ')+Math.abs(v).toFixed(0)+'% '+(v>=0?'más':'menos')+' que el mes anterior.';
+  }
+
+  summaryContent.innerHTML=
+    '<div class="summary">'+
+      mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+
+    '</div>'+
+    '<div class="summary-section"><h3>¿En qué gastaste?</h3>'+cats+'</div>'+
+    '<div class="summary-section"><h3>Fijos vs variables</h3><div class="split">'+
+      '<div class="pill-card"><div class="label">Fijos</div><div class="value">'+money(fijo)+'</div></div>'+
+      '<div class="pill-card"><div class="label">Variables</div><div class="value">'+money(variable)+'</div></div>'+
+    '</div></div>'+
+    '<div class="summary-section"><h3>¿Para quién?</h3><div class="split">'+
+      '<div class="pill-card"><div class="label">'+esc((ben[0]&&ben[0].nombre)||'Clari')+'</div><div class="value">'+money((ben[0]&&ben[0].monto)||0)+'</div></div>'+
+      '<div class="pill-card"><div class="label">'+esc((ben[1]&&ben[1].nombre)||'Hija')+'</div><div class="value">'+money((ben[1]&&ben[1].monto)||0)+'</div></div>'+
+    '</div></div>'+
+    '<div class="summary-section"><h3>Comparación</h3><div class="pill-card"><div class="sub">'+esc(comp)+'</div></div></div>';
+}
+
+function barRow(nombre,monto,max){
+  const pct=Math.max(4,Math.round((Number(monto||0)/max)*100));
+  return '<div class="bar-row"><div class="bar-name">'+esc(nombre)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div><div class="bar-value">'+money(monto)+'</div></div>';
+}
+
 function mini(l,v){return '<div class="card"><div class="label">'+l+'</div><div class="value">'+money(v)+'</div></div>'}
 function movs(a){if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';return a.map(m=>'<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>').join('')}
 function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');fillInstrumentos();fillCategorias()}
