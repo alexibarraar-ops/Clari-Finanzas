@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Clari Voice</title>
+<style>
+:root{--mint:#A8DDD3;--mint2:#78BDB0;--bg:#F7FBFA;--ink:#24413C;--muted:#6C817C}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Arial,sans-serif;color:var(--ink);display:flex;min-height:100vh;align-items:center;justify-content:center}
+.wrap{width:min(92vw,520px);text-align:center;padding:28px}
+h1{font-size:30px;margin:0 0 10px}
+p{color:var(--muted);line-height:1.45}
+.mic{width:112px;height:112px;border:0;border-radius:50%;background:var(--mint);font-size:44px;cursor:pointer;box-shadow:0 14px 34px rgba(36,65,60,.12);margin:24px 0 16px}
+.status{font-size:18px;min-height:54px;line-height:1.45}
+.actions{display:grid;gap:10px;margin-top:18px}
+button.action{border:0;border-radius:16px;padding:15px;font-size:16px;font-weight:700;cursor:pointer}
+.primary{background:var(--mint2);color:white}
+.secondary{background:white;color:var(--ink);border:1px solid #dce8e5!important}
+.small{font-size:12px;color:var(--muted);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Clari</h1>
+  <p>Contame el movimiento y después lo revisamos antes de guardar.</p>
+  <button class="mic" id="mic">🎙️</button>
+  <div class="status" id="status">Tocá el micrófono para empezar.</div>
+  <div class="actions">
+    <button class="action primary" id="use" disabled>Usar este texto</button>
+    <button class="action secondary" id="retry">Volver a intentar</button>
+  </div>
+  <div class="small">Ejemplo: “Hoy gasté 2500 pesos en comida con Mercado Pago”.</div>
+</div>
+<script>
+const params=new URLSearchParams(location.search);
+const returnUrl=params.get('return')||'';
+let finalText='';
+let rec=null;
+let listening=false;
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const mic=document.getElementById('mic');
+const status=document.getElementById('status');
+const use=document.getElementById('use');
+const retry=document.getElementById('retry');
+
+if(!SR){
+  status.textContent='Este navegador no ofrece reconocimiento de voz. Probá con Chrome actualizado.';
+  mic.disabled=true;
+}else{
+  rec=new SR();
+  rec.lang='es-AR';
+  rec.continuous=false;
+  rec.interimResults=true;
+  rec.maxAlternatives=1;
+
+  rec.onstart=()=>{
+    listening=true;
+    mic.textContent='⏹️';
+    status.textContent='Te escucho…';
+    use.disabled=true;
+  };
+
+  rec.onresult=(e)=>{
+    let interim='';
+    let done='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal) done+=t; else interim+=t;
+    }
+    if(done) finalText=(finalText+' '+done).trim();
+    status.textContent=(finalText+' '+interim).trim()||'Te escucho…';
+  };
+
+  rec.onerror=(e)=>{
+    listening=false;
+    mic.textContent='🎙️';
+    if(e.error==='not-allowed'){
+      status.textContent='Necesito permiso para usar el micrófono. Revisá el permiso del sitio en Chrome.';
+    }else{
+      status.textContent='No pude escuchar bien. Probemos otra vez.';
+    }
+  };
+
+  rec.onend=()=>{
+    listening=false;
+    mic.textContent='🎙️';
+    if(finalText){
+      status.textContent=finalText;
+      use.disabled=false;
+    }
+  };
+}
+
+mic.onclick=()=>{
+  if(!rec)return;
+  if(listening){rec.stop();return;}
+  finalText='';
+  try{rec.start()}catch(e){}
+};
+
+retry.onclick=()=>{
+  finalText='';
+  status.textContent='Tocá el micrófono para empezar.';
+  use.disabled=true;
+};
+
+use.onclick=()=>{
+  if(!finalText)return;
+  if(!returnUrl){
+    status.textContent='No encontré la dirección de regreso a la app.';
+    return;
+  }
+  const sep=returnUrl.includes('?')?'&':'?';
+  location.href=returnUrl+sep+'voice='+encodeURIComponent(finalText);
+};
+</script>
+</body>
+</html>
