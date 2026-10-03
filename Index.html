@@ -85,7 +85,109 @@ function handleVoiceReturn(){
 }
 function setupVoice(){let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;rec=new SR();rec.lang='es-AR';rec.continuous=false;rec.interimResults=false;rec.onstart=()=>{listening=true;mic.textContent='⏹️';voiceText.textContent='Te escucho…'};rec.onresult=e=>{voiceRaw=e.results[0][0].transcript;voiceText.textContent=voiceRaw};rec.onend=()=>{listening=false;mic.textContent='🎙️'}}
 function toggleVoice(){if(!rec)return toast('Este navegador no permite voz directa.');listening?rec.stop():rec.start()}
-function pasarVoz(){if(!voiceRaw)return toast('Primero grabá un movimiento.');let t=norm(voiceRaw);let ingreso=/(cobre|cobro|sueldo|depositaron|alquiler cobrado)/.test(t);setTipo(ingreso?'INGRESO':'GASTO');let n=voiceRaw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)/);monto.value=n?parseMoney(n[0]):'';concepto.value=voiceRaw;for(let a of DATA.cuentas){if(t.includes(norm(a.NOMBRE))){cuenta.value=a.NOMBRE;fillInstrumentos();break}}if(/credito/.test(t))instrumento.value='Crédito';if(/debito/.test(t))instrumento.value='Débito';closeSheet('voiceSheet');openSheet('formSheet')}
+function pasarVoz(){
+  if(!voiceRaw) return toast('Primero grabá un movimiento.');
+
+  const t=norm(voiceRaw);
+  const ingreso=/(cobre|cobro|sueldo|depositaron|alquiler cobrado|me pagaron|me transfirieron)/.test(t);
+  setTipo(ingreso?'INGRESO':'GASTO');
+
+  const n=voiceRaw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)/);
+  monto.value=n?parseMoney(n[0]):'';
+
+  const cuentaDetectada=detectarCuenta(t);
+  if(cuentaDetectada){
+    cuenta.value=cuentaDetectada;
+    fillInstrumentos();
+  }
+
+  if(/credito/.test(t)) instrumento.value='Crédito';
+  else if(/debito/.test(t)) instrumento.value='Débito';
+
+  const cat=detectarCategoria(t, ingreso?'INGRESO':'GASTO');
+  if(cat){
+    categoria.value=cat.NOMBRE;
+    if(typeof categoria.onchange==='function') categoria.onchange();
+  }
+
+  concepto.value=detectarConcepto(t,cat,cuentaDetectada);
+
+  closeSheet('voiceSheet');
+  openSheet('formSheet');
+}
+
+function detectarCuenta(t){
+  for(const a of DATA.cuentas||[]){
+    if(t.includes(norm(a.NOMBRE))) return a.NOMBRE;
+  }
+  if(/mercado pago/.test(t)) return 'Mercado Pago';
+  if(/personal pay/.test(t)) return 'Personal Pay';
+  if(/banco galicia|galicia/.test(t)) return 'Banco Galicia';
+  if(/banco ciudad|ciudad/.test(t)) return 'Banco Ciudad';
+  if(/efectivo/.test(t)) return 'Efectivo';
+  return '';
+}
+
+function detectarCategoria(t,tipoMov){
+  const cats=(DATA.categorias||[]).filter(c=>String(c.TIPO).toUpperCase()===tipoMov);
+
+  const exact=cats.find(c=>t.includes(norm(c.NOMBRE)));
+  if(exact) return exact;
+
+  const reglas=[
+    [/(supermercado|coto|carrefour|comida|almuerzo|cena|verduleria|carniceria|panaderia)/,'Comida'],
+    [/(delivery|rappi|pedidos ya)/,'Delivery'],
+    [/(cafe|cafeteria)/,'Café'],
+    [/(ropa|remera|pantalon|zapatilla|campera|vestido)/,'Ropa'],
+    [/(uber|cabify|taxi|subte|colectivo|tren|sube)/,'Transporte'],
+    [/(luz|edenor|edesur)/,'Luz'],
+    [/(gas|metrogas)/,'Gas'],
+    [/(agua|aysa)/,'Agua'],
+    [/(internet|fibertel|personal flow|telecentro)/,'Internet'],
+    [/(celular|telefono|movistar|claro)/,'Celular'],
+    [/(seguro)/,'Seguro'],
+    [/(prepaga|obra social|medico|farmacia)/,'Prepaga / obra social'],
+    [/(salida|cine|teatro|bar|restaurant|restaurante)/,'Salidas'],
+    [/(sueldo|maestra|jardin)/,'Sueldo - maestra jardinera'],
+    [/(alquiler cobrado|inquilino|cobre el alquiler|cobro de alquiler)/,'Alquiler cobrado']
+  ];
+
+  for(const [rx,nombre] of reglas){
+    if(rx.test(t)){
+      const found=cats.find(c=>norm(c.NOMBRE)===norm(nombre));
+      if(found) return found;
+    }
+  }
+
+  return cats.find(c=>/otros/i.test(c.NOMBRE)) || cats[0] || null;
+}
+
+function detectarConcepto(t,cat,cuentaDetectada){
+  let s=t;
+
+  s=s.replace(/\b(hoy|ayer|anteayer)\b/g,' ');
+  s=s.replace(/\b(gaste|gasto|pague|pago|compre|cobre|cobro|me depositaron|me pagaron|me transfirieron)\b/g,' ');
+  s=s.replace(/\b(pesos?)\b/g,' ');
+  s=s.replace(/\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:[,.]\d+)?/g,' ');
+  s=s.replace(/\b(con|por|en|de|del|la|el|una|un)\b/g,' ');
+
+  const tokens=[
+    cuentaDetectada,
+    'credito','debito','tarjeta','saldo','app',
+    cat&&cat.NOMBRE
+  ].filter(Boolean);
+
+  tokens.forEach(x=>{
+    const nx=norm(x);
+    s=s.split(nx).join(' ');
+  });
+
+  s=s.replace(/\s+/g,' ').trim();
+
+  if(!s && cat) return cat.NOMBRE;
+  return s ? s.charAt(0).toUpperCase()+s.slice(1) : 'Movimiento';
+}
+
 function openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
 function money(v){return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(v||0))}
 function parseMoney(v){let s=String(v||'').replace(/[^\d,.-]/g,'');if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return Number(s.replace(',','.'))||0}
