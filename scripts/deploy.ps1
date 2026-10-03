@@ -11,12 +11,13 @@ git fetch origin main
 git switch main
 git pull --ff-only origin main
 
-if (-not (Get-Command clasp -ErrorAction SilentlyContinue)) {
-  throw "No se encontro 'clasp'. Instalar con: npm install -g @google/clasp"
+$claspCmd = Get-Command clasp.cmd -ErrorAction SilentlyContinue
+if (-not $claspCmd) {
+  throw "No se encontro 'clasp.cmd'. Instalar con: npm install -g @google/clasp"
 }
 
 Write-Host "== Enviando archivos a Apps Script =="
-clasp push -f
+& $claspCmd.Source push -f
 
 Write-Host ""
 Write-Host "Listo. Codigo enviado a Apps Script."
