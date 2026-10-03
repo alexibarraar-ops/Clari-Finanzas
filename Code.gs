@@ -20,7 +20,7 @@ function doGet() {
 
 function getBootstrapData() {
   return {
-    appUrl: ScriptApp.getService().getUrl(),
+    appUrl: 'https://alexibarraar-ops.github.io/Clari-Finanzas/',
     config: getConfig_(),
     categorias: readObjects_(CLARI.SHEETS.CATEGORIAS).filter(r => isTrue_(r.ACTIVA)),
     cuentas: readObjects_(CLARI.SHEETS.CUENTAS).filter(r => isTrue_(r.ACTIVA)),
