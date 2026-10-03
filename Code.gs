@@ -176,6 +176,10 @@ function getResumenMes_() {
 }
 
 
+function getResumenDetallado() {
+  return getResumenDetallado_();
+}
+
 function getResumenDetallado_() {
   const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
   const lastRow = sh.getLastRow();
