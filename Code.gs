@@ -20,6 +20,7 @@ function doGet() {
 
 function getBootstrapData() {
   return {
+    appUrl: ScriptApp.getService().getUrl(),
     config: getConfig_(),
     categorias: readObjects_(CLARI.SHEETS.CATEGORIAS).filter(r => isTrue_(r.ACTIVA)),
     cuentas: readObjects_(CLARI.SHEETS.CUENTAS).filter(r => isTrue_(r.ACTIVA)),
