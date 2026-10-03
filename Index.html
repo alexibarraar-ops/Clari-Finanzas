@@ -18,14 +18,14 @@
     .seg button{border:0;background:transparent;padding:11px;border-radius:10px;font-weight:700}.seg .on{background:#fff}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 4px}
     input,select,textarea{width:100%;padding:13px;border:1px solid #dce8e5;border-radius:14px;background:#fff;font-size:16px}.save{background:var(--mint2);color:white;margin-top:8px}
     .mic{display:block;margin:28px auto 14px;width:90px;height:90px;border:0;border-radius:50%;font-size:34px;background:var(--mint)}.voiceText{text-align:center;min-height:54px;line-height:1.4}
-    .notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
+    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
   </style>
 </head>
 <body>
 <div class="app" id="app">Cargando Clari…</div>
 
 <div class="sheet" id="formSheet"><div class="panel">
-  <div class="head"><h2>Nuevo movimiento</h2><button class="close" onclick="closeSheet('formSheet')">×</button></div>
+  <div class="head"><h2 id="formTitle">Nuevo movimiento</h2><button class="close" onclick="closeSheet('formSheet')">×</button></div>
   <div class="seg"><button id="gBtn" class="on" onclick="setTipo('GASTO')">Gasto</button><button id="iBtn" onclick="setTipo('INGRESO')">Ingreso</button></div>
   <div class="field"><label>Monto</label><input id="monto" inputmode="decimal" placeholder="$ 0"></div>
   <div class="field"><label>Concepto</label><input id="concepto" placeholder="Ej. supermercado"></div>
@@ -36,7 +36,8 @@
   <div class="field" id="benWrap"><label>¿Para quién?</label><select id="beneficiario"></select></div>
   <div class="field"><label>Fecha</label><input type="date" id="fecha"></div>
   <div class="field"><label>Nota</label><textarea id="nota"></textarea></div>
-  <button class="big save" onclick="guardar(event)">Guardar movimiento</button>
+  <button class="big save" id="saveBtn" onclick="guardar(event)">Guardar movimiento</button>
+  <button class="big danger" id="deleteBtn" style="display:none" onclick="eliminarActual()">Eliminar movimiento</button>
 </div></div>
 
 <div class="sheet" id="voiceSheet"><div class="panel">
@@ -48,7 +49,7 @@
 
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false;
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null;
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
 function init(d){DATA=d;render();hydrate();handleVoiceReturn()}
@@ -60,16 +61,123 @@ function render(){
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
 }
 function mini(l,v){return '<div class="card"><div class="label">'+l+'</div><div class="value">'+money(v)+'</div></div>'}
-function movs(a){if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';return a.map(m=>'<div class="mov"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>').join('')}
+function movs(a){if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';return a.map(m=>'<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>').join('')}
 function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');fillInstrumentos();fillCategorias()}
 function setTipo(t){tipo=t;gBtn.classList.toggle('on',t==='GASTO');iBtn.classList.toggle('on',t==='INGRESO');tipoWrap.style.display=t==='GASTO'?'block':'none';benWrap.style.display=t==='GASTO'?'block':'none';fillCategorias()}
 function fillCategorias(){let list=DATA.categorias.filter(x=>x.TIPO===tipo);categoria.innerHTML=list.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');categoria.onchange=()=>{let c=list.find(x=>x.NOMBRE===categoria.value);if(c&&c.FIJO_VARIABLE_DEFAULT&&tipo==='GASTO')tipoGasto.value=c.FIJO_VARIABLE_DEFAULT};if(list.length)categoria.onchange()}
 function fillInstrumentos(){let list=DATA.instrumentos.filter(x=>x.CUENTA===cuenta.value);instWrap.style.display=list.length?'block':'none';instrumento.innerHTML=list.map(x=>'<option data-medio="'+esc(x.MEDIO_PAGO)+'">'+esc(x.INSTRUMENTO)+'</option>').join('')}
-function openManual(){voiceRaw='';monto.value='';concepto.value='';nota.value='';fecha.value=today();setTipo('GASTO');openSheet('formSheet')}
-function guardar(e){let o=instrumento.options[instrumento.selectedIndex];let p={tipo,monto:parseMoney(monto.value),concepto:concepto.value.trim(),categoria:categoria.value,cuenta:cuenta.value,medioPago:o?o.dataset.medio:cuenta.value,instrumento:instrumento.value||'',tipoGasto:tipo==='GASTO'?tipoGasto.value:'',beneficiario:tipo==='GASTO'?beneficiario.value:'Clari',fecha:fecha.value,nota:nota.value.trim(),origen:voiceRaw?'VOZ':'MANUAL',textoOriginal:voiceRaw};
- if(!p.monto)return toast('Ingresá un monto válido.');if(!p.concepto)return toast('Ingresá un concepto.');
- e.currentTarget.disabled=true;google.script.run.withSuccessHandler(r=>{DATA.resumen=r.resumen;DATA.ultimos=r.ultimos;closeSheet('formSheet');voiceRaw='';render();e.currentTarget.disabled=false;toast('Movimiento guardado.')}).withFailureHandler(x=>{e.currentTarget.disabled=false;toast(x.message||x)}).guardarMovimiento(p)
+function openManual(){editingId=null;voiceRaw='';formTitle.textContent='Nuevo movimiento';saveBtn.textContent='Guardar movimiento';deleteBtn.style.display='none';monto.value='';concepto.value='';nota.value='';fecha.value=today();setTipo('GASTO');openSheet('formSheet')}
+function guardar(e){
+  let o=instrumento.options[instrumento.selectedIndex];
+  let p={
+    id:editingId||'',
+    tipo,
+    monto:parseMoney(monto.value),
+    concepto:concepto.value.trim(),
+    categoria:categoria.value,
+    cuenta:cuenta.value,
+    medioPago:o?o.dataset.medio:cuenta.value,
+    instrumento:instrumento.value||'',
+    tipoGasto:tipo==='GASTO'?tipoGasto.value:'',
+    beneficiario:tipo==='GASTO'?beneficiario.value:'Clari',
+    fecha:fecha.value,
+    nota:nota.value.trim(),
+    origen:voiceRaw?'VOZ':'MANUAL',
+    textoOriginal:voiceRaw
+  };
+
+  if(!p.monto) return toast('Ingresá un monto válido.');
+  if(!p.concepto) return toast('Ingresá un concepto.');
+
+  const btn=e.currentTarget;
+  btn.disabled=true;
+  btn.textContent=editingId?'Guardando cambios…':'Guardando…';
+
+  const runner=google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumen=r.resumen;
+      DATA.ultimos=r.ultimos;
+      closeSheet('formSheet');
+      editingId=null;
+      voiceRaw='';
+      render();
+      btn.disabled=false;
+      btn.textContent='Guardar movimiento';
+      toast('Movimiento guardado.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;
+      btn.textContent=editingId?'Guardar cambios':'Guardar movimiento';
+      toast(x.message||x);
+    });
+
+  if(editingId) runner.actualizarMovimiento(p);
+  else runner.guardarMovimiento(p);
 }
+
+function editarMovimiento(id){
+  const m=(DATA.ultimos||[]).find(x=>x.id===id);
+  if(!m) return toast('No encontré ese movimiento.');
+
+  editingId=id;
+  voiceRaw='';
+  formTitle.textContent='Editar movimiento';
+  saveBtn.textContent='Guardar cambios';
+  deleteBtn.style.display='block';
+
+  setTipo(String(m.tipo||'GASTO').toUpperCase());
+  monto.value=m.monto||'';
+  concepto.value=m.concepto||'';
+
+  if(m.categoria) categoria.value=m.categoria;
+  if(typeof categoria.onchange==='function') categoria.onchange();
+
+  if(m.cuenta){
+    cuenta.value=m.cuenta;
+    fillInstrumentos();
+  }
+
+  if(m.instrumento) instrumento.value=m.instrumento;
+  if(m.tipoGasto) tipoGasto.value=m.tipoGasto;
+  if(m.beneficiario) beneficiario.value=m.beneficiario;
+  nota.value=m.nota||'';
+  fecha.value=fechaIsoDesdeDisplay(m.fecha);
+
+  openSheet('formSheet');
+}
+
+function eliminarActual(){
+  if(!editingId) return;
+  if(!confirm('¿Eliminar este movimiento?')) return;
+
+  deleteBtn.disabled=true;
+  deleteBtn.textContent='Eliminando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumen=r.resumen;
+      DATA.ultimos=r.ultimos;
+      closeSheet('formSheet');
+      editingId=null;
+      render();
+      deleteBtn.disabled=false;
+      deleteBtn.textContent='Eliminar movimiento';
+      toast('Movimiento eliminado.');
+    })
+    .withFailureHandler(x=>{
+      deleteBtn.disabled=false;
+      deleteBtn.textContent='Eliminar movimiento';
+      toast(x.message||x);
+    })
+    .eliminarMovimiento(editingId);
+}
+
+function fechaIsoDesdeDisplay(v){
+  const m=String(v||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return today();
+  return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+}
+
 function openVoiceExternal(){
   if(!DATA || !DATA.appUrl) return toast('Todavía no tengo la dirección de regreso de la app.');
   const voiceUrl='https://alexibarraar-ops.github.io/Clari-Finanzas/voice.html?return='+encodeURIComponent(DATA.appUrl);
