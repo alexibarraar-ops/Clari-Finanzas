@@ -20,7 +20,7 @@
 <body>
   <iframe id="app" title="Clari Finanzas" allow="microphone"></iframe>
   <script>
-    const APP='https://script.google.com/macros/s/AKfycbzUuwzw3ytKRSajBOVAOPn2L-7dr12OqswhVk6m8eBH5dKndmws9RBDMUc0j7nMVIUt/exec';
+    const APP='https://script.google.com/macros/s/AKfycbzUuwzw3ytKRSajB0VAoPn2L-7dr12QqswhVk6m8eBHSdKndmws9RBDMUc0j7nMViUt/exec';
     const p=new URLSearchParams(location.search);
     const voice=p.get('voice');
     document.getElementById('app').src=voice ? APP+'?voice='+encodeURIComponent(voice) : APP;
