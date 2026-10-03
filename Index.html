@@ -169,10 +169,14 @@ function detectarConcepto(t,cat,cuentaDetectada){
   s=s.replace(/\b(gaste|gasto|pague|pago|compre|cobre|cobro|me depositaron|me pagaron|me transfirieron)\b/g,' ');
   s=s.replace(/\b(pesos?)\b/g,' ');
   s=s.replace(/\$?\s*\d{1,3}(?:[.\s]\d{3})*(?:[,.]\d+)?/g,' ');
-  s=s.replace(/\b(con|por|en|de|del|la|el|una|un)\b/g,' ');
+  s=s.replace(/\b(con|por|en|de|del|la|el|una|un|y)\b/g,' ');
 
   const tokens=[
     cuentaDetectada,
+    'mercado pago',
+    'personal pay',
+    'banco galicia',
+    'banco ciudad',
     'credito','debito','tarjeta','saldo','app',
     cat&&cat.NOMBRE
   ].filter(Boolean);
@@ -185,7 +189,11 @@ function detectarConcepto(t,cat,cuentaDetectada){
   s=s.replace(/\s+/g,' ').trim();
 
   if(!s && cat) return cat.NOMBRE;
-  return s ? s.charAt(0).toUpperCase()+s.slice(1) : 'Movimiento';
+
+  // Si sólo quedó un fragmento del medio de pago, preferimos la categoría.
+  if(cat && /^(mercado|galicia|ciudad|personal|pago)$/.test(s)) return cat.NOMBRE;
+
+  return s ? s.charAt(0).toUpperCase()+s.slice(1) : (cat ? cat.NOMBRE : 'Movimiento');
 }
 
 function openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
