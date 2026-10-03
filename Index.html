@@ -51,12 +51,12 @@
 let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false;
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
-function init(d){DATA=d;render();hydrate();setupVoice()}
+function init(d){DATA=d;render();hydrate();handleVoiceReturn()}
 function render(){
  const r=DATA.resumen||{ingresos:0,gastos:0,disponible:0};
  app.innerHTML='<div class="brand">Clari</div><div class="quote">'+esc(DATA.frase||'Hoy también cuenta.')+'</div>'+
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
- '<button class="big voice" onclick="openSheet(\'voiceSheet\')">🎙️ Decir un movimiento</button>'+
+ '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
 }
 function mini(l,v){return '<div class="card"><div class="label">'+l+'</div><div class="value">'+money(v)+'</div></div>'}
@@ -69,6 +69,19 @@ function openManual(){voiceRaw='';monto.value='';concepto.value='';nota.value=''
 function guardar(e){let o=instrumento.options[instrumento.selectedIndex];let p={tipo,monto:parseMoney(monto.value),concepto:concepto.value.trim(),categoria:categoria.value,cuenta:cuenta.value,medioPago:o?o.dataset.medio:cuenta.value,instrumento:instrumento.value||'',tipoGasto:tipo==='GASTO'?tipoGasto.value:'',beneficiario:tipo==='GASTO'?beneficiario.value:'Clari',fecha:fecha.value,nota:nota.value.trim(),origen:voiceRaw?'VOZ':'MANUAL',textoOriginal:voiceRaw};
  if(!p.monto)return toast('Ingresá un monto válido.');if(!p.concepto)return toast('Ingresá un concepto.');
  e.currentTarget.disabled=true;google.script.run.withSuccessHandler(r=>{DATA.resumen=r.resumen;DATA.ultimos=r.ultimos;closeSheet('formSheet');voiceRaw='';render();e.currentTarget.disabled=false;toast('Movimiento guardado.')}).withFailureHandler(x=>{e.currentTarget.disabled=false;toast(x.message||x)}).guardarMovimiento(p)
+}
+function openVoiceExternal(){
+  if(!DATA || !DATA.appUrl) return toast('Todavía no tengo la dirección de regreso de la app.');
+  const voiceUrl='https://alexibarraar-ops.github.io/Clari-Finanzas/voice.html?return='+encodeURIComponent(DATA.appUrl);
+  window.top.location.href=voiceUrl;
+}
+function handleVoiceReturn(){
+  google.script.url.getLocation(function(location){
+    const text=(location && location.parameter && location.parameter.voice) ? location.parameter.voice : '';
+    if(!text) return;
+    voiceRaw=text;
+    pasarVoz();
+  });
 }
 function setupVoice(){let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;rec=new SR();rec.lang='es-AR';rec.continuous=false;rec.interimResults=false;rec.onstart=()=>{listening=true;mic.textContent='⏹️';voiceText.textContent='Te escucho…'};rec.onresult=e=>{voiceRaw=e.results[0][0].transcript;voiceText.textContent=voiceRaw};rec.onend=()=>{listening=false;mic.textContent='🎙️'}}
 function toggleVoice(){if(!rec)return toast('Este navegador no permite voz directa.');listening?rec.stop():rec.start()}
