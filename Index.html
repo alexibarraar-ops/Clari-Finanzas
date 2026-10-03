@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root{--mint:#A8DDD3;--mint2:#78BDB0;--bg:#F7FBFA;--ink:#24413C;--muted:#6C817C;--card:#fff}
+    *{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    .app{max-width:520px;margin:auto;padding:24px 18px 100px}
+    .brand{font-size:30px;font-weight:700}.quote{color:var(--muted);margin:10px 0 24px;line-height:1.4}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:var(--card);border-radius:20px;padding:16px;box-shadow:0 8px 24px rgba(36,65,60,.08)}
+    .label{font-size:12px;color:var(--muted)}.value{font-weight:700;margin-top:6px}.big{width:100%;border:0;border-radius:18px;padding:18px;font-size:17px;font-weight:700;cursor:pointer}
+    .voice{background:var(--mint);color:var(--ink);margin-top:16px}.secondary{background:#fff;color:var(--ink);border:1px solid #dce8e5;margin-top:10px}
+    h2{font-size:18px;margin-top:28px}.mov{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #edf2f0}.mov:last-child{border-bottom:0}
+    .sub{font-size:12px;color:var(--muted);margin-top:3px}.sheet{position:fixed;inset:0;background:#0004;display:none;align-items:flex-end;justify-content:center}.sheet.show{display:flex}
+    .panel{width:100%;max-width:520px;max-height:94vh;overflow:auto;background:var(--bg);border-radius:26px 26px 0 0;padding:20px}.head{display:flex;justify-content:space-between;align-items:center}
+    .close{border:0;background:#fff;border-radius:50%;width:38px;height:38px;font-size:22px}.seg{display:grid;grid-template-columns:1fr 1fr;background:#e9f4f1;padding:4px;border-radius:14px;margin:18px 0}
+    .seg button{border:0;background:transparent;padding:11px;border-radius:10px;font-weight:700}.seg .on{background:#fff}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 4px}
+    input,select,textarea{width:100%;padding:13px;border:1px solid #dce8e5;border-radius:14px;background:#fff;font-size:16px}.save{background:var(--mint2);color:white;margin-top:8px}
+    .mic{display:block;margin:28px auto 14px;width:90px;height:90px;border:0;border-radius:50%;font-size:34px;background:var(--mint)}.voiceText{text-align:center;min-height:54px;line-height:1.4}
+    .notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
+  </style>
+</head>
+<body>
+<div class="app" id="app">Cargando Clari…</div>
+
+<div class="sheet" id="formSheet"><div class="panel">
+  <div class="head"><h2>Nuevo movimiento</h2><button class="close" onclick="closeSheet('formSheet')">×</button></div>
+  <div class="seg"><button id="gBtn" class="on" onclick="setTipo('GASTO')">Gasto</button><button id="iBtn" onclick="setTipo('INGRESO')">Ingreso</button></div>
+  <div class="field"><label>Monto</label><input id="monto" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Concepto</label><input id="concepto" placeholder="Ej. supermercado"></div>
+  <div class="field"><label>Categoría</label><select id="categoria"></select></div>
+  <div class="field"><label>Cuenta</label><select id="cuenta" onchange="fillInstrumentos()"></select></div>
+  <div class="field" id="instWrap"><label>Instrumento</label><select id="instrumento"></select></div>
+  <div class="field" id="tipoWrap"><label>Tipo de gasto</label><select id="tipoGasto"><option>VARIABLE</option><option>FIJO</option></select></div>
+  <div class="field" id="benWrap"><label>¿Para quién?</label><select id="beneficiario"></select></div>
+  <div class="field"><label>Fecha</label><input type="date" id="fecha"></div>
+  <div class="field"><label>Nota</label><textarea id="nota"></textarea></div>
+  <button class="big save" onclick="guardar(event)">Guardar movimiento</button>
+</div></div>
+
+<div class="sheet" id="voiceSheet"><div class="panel">
+  <div class="head"><h2>Decir un movimiento</h2><button class="close" onclick="closeSheet('voiceSheet')">×</button></div>
+  <button class="mic" id="mic" onclick="toggleVoice()">🎙️</button>
+  <div class="voiceText" id="voiceText">Tocá el micrófono y contame qué movimiento hiciste.</div>
+  <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
+</div></div>
+
+<div class="notice" id="notice"></div>
+<script>
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false;
+google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
+
+function init(d){DATA=d;render();hydrate();setupVoice()}
+function render(){
+ const r=DATA.resumen||{ingresos:0,gastos:0,disponible:0};
+ app.innerHTML='<div class="brand">Clari</div><div class="quote">'+esc(DATA.frase||'Hoy también cuenta.')+'</div>'+
+ '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
+ '<button class="big voice" onclick="openSheet(\'voiceSheet\')">🎙️ Decir un movimiento</button>'+
+ '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button><h2>Últimos movimientos</h2><div class="card">'+movs(DATA.ultimos||[])+'</div>';
+}
+function mini(l,v){return '<div class="card"><div class="label">'+l+'</div><div class="value">'+money(v)+'</div></div>'}
+function movs(a){if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';return a.map(m=>'<div class="mov"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>').join('')}
+function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');fillInstrumentos();fillCategorias()}
+function setTipo(t){tipo=t;gBtn.classList.toggle('on',t==='GASTO');iBtn.classList.toggle('on',t==='INGRESO');tipoWrap.style.display=t==='GASTO'?'block':'none';benWrap.style.display=t==='GASTO'?'block':'none';fillCategorias()}
+function fillCategorias(){let list=DATA.categorias.filter(x=>x.TIPO===tipo);categoria.innerHTML=list.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');categoria.onchange=()=>{let c=list.find(x=>x.NOMBRE===categoria.value);if(c&&c.FIJO_VARIABLE_DEFAULT&&tipo==='GASTO')tipoGasto.value=c.FIJO_VARIABLE_DEFAULT};if(list.length)categoria.onchange()}
+function fillInstrumentos(){let list=DATA.instrumentos.filter(x=>x.CUENTA===cuenta.value);instWrap.style.display=list.length?'block':'none';instrumento.innerHTML=list.map(x=>'<option data-medio="'+esc(x.MEDIO_PAGO)+'">'+esc(x.INSTRUMENTO)+'</option>').join('')}
+function openManual(){voiceRaw='';monto.value='';concepto.value='';nota.value='';fecha.value=today();setTipo('GASTO');openSheet('formSheet')}
+function guardar(e){let o=instrumento.options[instrumento.selectedIndex];let p={tipo,monto:parseMoney(monto.value),concepto:concepto.value.trim(),categoria:categoria.value,cuenta:cuenta.value,medioPago:o?o.dataset.medio:cuenta.value,instrumento:instrumento.value||'',tipoGasto:tipo==='GASTO'?tipoGasto.value:'',beneficiario:tipo==='GASTO'?beneficiario.value:'Clari',fecha:fecha.value,nota:nota.value.trim(),origen:voiceRaw?'VOZ':'MANUAL',textoOriginal:voiceRaw};
+ if(!p.monto)return toast('Ingresá un monto válido.');if(!p.concepto)return toast('Ingresá un concepto.');
+ e.currentTarget.disabled=true;google.script.run.withSuccessHandler(r=>{DATA.resumen=r.resumen;DATA.ultimos=r.ultimos;closeSheet('formSheet');voiceRaw='';render();e.currentTarget.disabled=false;toast('Movimiento guardado.')}).withFailureHandler(x=>{e.currentTarget.disabled=false;toast(x.message||x)}).guardarMovimiento(p)
+}
+function setupVoice(){let SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;rec=new SR();rec.lang='es-AR';rec.continuous=false;rec.interimResults=false;rec.onstart=()=>{listening=true;mic.textContent='⏹️';voiceText.textContent='Te escucho…'};rec.onresult=e=>{voiceRaw=e.results[0][0].transcript;voiceText.textContent=voiceRaw};rec.onend=()=>{listening=false;mic.textContent='🎙️'}}
+function toggleVoice(){if(!rec)return toast('Este navegador no permite voz directa.');listening?rec.stop():rec.start()}
+function pasarVoz(){if(!voiceRaw)return toast('Primero grabá un movimiento.');let t=norm(voiceRaw);let ingreso=/(cobre|cobro|sueldo|depositaron|alquiler cobrado)/.test(t);setTipo(ingreso?'INGRESO':'GASTO');let n=voiceRaw.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)/);monto.value=n?parseMoney(n[0]):'';concepto.value=voiceRaw;for(let a of DATA.cuentas){if(t.includes(norm(a.NOMBRE))){cuenta.value=a.NOMBRE;fillInstrumentos();break}}if(/credito/.test(t))instrumento.value='Crédito';if(/debito/.test(t))instrumento.value='Débito';closeSheet('voiceSheet');openSheet('formSheet')}
+function openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
+function money(v){return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(Number(v||0))}
+function parseMoney(v){let s=String(v||'').replace(/[^\d,.-]/g,'');if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');return Number(s.replace(',','.'))||0}
+function today(){let d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function toast(m){notice.textContent=m;notice.classList.add('show');setTimeout(()=>notice.classList.remove('show'),2500)}
+</script>
+</body>
+</html>
