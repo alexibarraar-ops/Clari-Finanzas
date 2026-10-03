@@ -28,6 +28,7 @@ function getBootstrapData() {
     beneficiarios: readObjects_(CLARI.SHEETS.BENEFICIARIOS).filter(r => isTrue_(r.ACTIVO)),
     frase: getFraseDelDia_(),
     resumen: getResumenMes_(),
+    resumenDetallado: getResumenDetallado_(),
     ultimos: getUltimosMovimientos_(6)
   };
 }
@@ -172,6 +173,91 @@ function getResumenMes_() {
     });
   }
   return { ingresos, gastos, disponible: ingresos - gastos };
+}
+
+
+function getResumenDetallado_() {
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastRow = sh.getLastRow();
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const prev = new Date(currentYear, currentMonth - 1, 1);
+  const prevMonth = prev.getMonth();
+  const prevYear = prev.getFullYear();
+
+  const categorias = {};
+  const beneficiarios = {};
+  const tipoGasto = { FIJO: 0, VARIABLE: 0 };
+
+  let ingresos = 0;
+  let gastos = 0;
+  let gastosMesAnterior = 0;
+
+  if (lastRow > 1) {
+    const values = sh.getRange(2, 1, lastRow - 1, 17).getValues();
+
+    values.forEach(r => {
+      const fecha = parseFecha_(r[1]);
+      if (!fecha) return;
+
+      const tipo = String(r[3] || '').toUpperCase();
+      const monto = Number(r[4] || 0);
+      const categoria = String(r[6] || 'Otros');
+      const tg = String(r[10] || '').toUpperCase();
+      const beneficiario = String(r[11] || 'Clari');
+
+      const isCurrent = fecha.getMonth() === currentMonth && fecha.getFullYear() === currentYear;
+      const isPrev = fecha.getMonth() === prevMonth && fecha.getFullYear() === prevYear;
+
+      if (isPrev && tipo === 'GASTO') {
+        gastosMesAnterior += monto;
+      }
+
+      if (!isCurrent) return;
+
+      if (tipo === 'INGRESO') {
+        ingresos += monto;
+        return;
+      }
+
+      if (tipo === 'GASTO') {
+        gastos += monto;
+        categorias[categoria] = (categorias[categoria] || 0) + monto;
+        beneficiarios[beneficiario] = (beneficiarios[beneficiario] || 0) + monto;
+
+        if (tg === 'FIJO' || tg === 'VARIABLE') {
+          tipoGasto[tg] += monto;
+        }
+      }
+    });
+  }
+
+  const categoriasOrdenadas = Object.keys(categorias)
+    .map(nombre => ({ nombre, monto: categorias[nombre] }))
+    .sort((a,b) => b.monto - a.monto);
+
+  const beneficiariosOrdenados = Object.keys(beneficiarios)
+    .map(nombre => ({ nombre, monto: beneficiarios[nombre] }))
+    .sort((a,b) => b.monto - a.monto);
+
+  let variacion = null;
+  if (gastosMesAnterior > 0) {
+    variacion = ((gastos - gastosMesAnterior) / gastosMesAnterior) * 100;
+  }
+
+  return {
+    ingresos,
+    gastos,
+    disponible: ingresos - gastos,
+    categorias: categoriasOrdenadas,
+    beneficiarios: beneficiariosOrdenados,
+    tipoGasto,
+    gastosMesAnterior,
+    variacionVsAnterior: variacion
+  };
 }
 
 function validarMovimiento_(p) {
