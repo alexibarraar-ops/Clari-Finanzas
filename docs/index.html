@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Clari Finanzas</title>
+  <meta name="theme-color" content="#A8DDD3">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Clari">
+  <link rel="icon" type="image/png" href="./clari-icon-192.png">
+  <link rel="apple-touch-icon" href="./clari-icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:#F7FBFA;overflow:hidden}
+    iframe{border:0;width:100%;height:100%;display:block;background:#F7FBFA}
+  </style>
+</head>
+<body>
+  <iframe id="app" title="Clari Finanzas" allow="microphone"></iframe>
+  <script>
+    const APP='https://script.google.com/macros/s/AKfycbzUuwzw3ytKRSajBOVAOPn2L-7dr12OqswhVk6m8eBH5dKndmws9RBDMUc0j7nMVIUt/exec';
+    const p=new URLSearchParams(location.search);
+    const voice=p.get('voice');
+    document.getElementById('app').src=voice ? APP+'?voice='+encodeURIComponent(voice) : APP;
+  </script>
+</body>
+</html>
