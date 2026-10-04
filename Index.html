@@ -69,10 +69,10 @@
 
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null;
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='';
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
-function init(d){DATA=d;render();hydrate();handleVoiceReturn()}
+function init(d){DATA=d;fraseDelDia=normalizarFrase(d.frase||'Hoy también cuenta.');render();hydrate();handleVoiceReturn()}
 function render(){
  const r=DATA.resumen||{ingresos:0,gastos:0,disponible:0};
  const mes=nombreMesActual();
@@ -81,7 +81,7 @@ function render(){
    '<div class="eyebrow">Lado A · Tus finanzas</div>'+
    '<div class="brand">Clari</div>'+
    '<div class="month">'+esc(mes)+'</div>'+
-   '<div class="quote">“'+esc(DATA.frase||'Hoy también cuenta.')+'”</div>'+
+   '<div class="quote" id="fraseDia">“'+esc(fraseDelDia)+'”</div>'+
    '<div class="music-mark">♪</div>'+
  '</div>'+
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
@@ -434,7 +434,7 @@ function detectarConcepto(t,cat,cuentaDetectada){
   return s ? s.charAt(0).toUpperCase()+s.slice(1) : (cat ? cat.NOMBRE : 'Movimiento');
 }
 
-function openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
+function normalizarFrase(v){return String(v||'').replace(/\s+/g,' ').trim()||'Hoy también cuenta.'}\nfunction openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
 function nombreMesActual(){
   const s=new Intl.DateTimeFormat('es-AR',{month:'long',year:'numeric'}).format(new Date());
   return s.charAt(0).toUpperCase()+s.slice(1);
