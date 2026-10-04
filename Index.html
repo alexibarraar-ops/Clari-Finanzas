@@ -434,7 +434,9 @@ function detectarConcepto(t,cat,cuentaDetectada){
   return s ? s.charAt(0).toUpperCase()+s.slice(1) : (cat ? cat.NOMBRE : 'Movimiento');
 }
 
-function normalizarFrase(v){return String(v||'').replace(/\s+/g,' ').trim()||'Hoy también cuenta.'}\nfunction openSheet(id){document.getElementById(id).classList.add('show')}function closeSheet(id){document.getElementById(id).classList.remove('show')}
+function normalizarFrase(v){return String(v||'').replace(/\s+/g,' ').trim()||'Hoy también cuenta.'}
+function openSheet(id){document.getElementById(id).classList.add('show')}
+function closeSheet(id){document.getElementById(id).classList.remove('show')}
 function nombreMesActual(){
   const s=new Intl.DateTimeFormat('es-AR',{month:'long',year:'numeric'}).format(new Date());
   return s.charAt(0).toUpperCase()+s.slice(1);
