@@ -123,7 +123,7 @@ function render(){
    '<div class="bandoneon-mark" aria-hidden="true"><svg viewBox="0 0 100 100"><rect x="8" y="28" width="24" height="44" rx="5"></rect><rect x="68" y="28" width="24" height="44" rx="5"></rect><line x1="32" y1="32" x2="68" y2="32"></line><line x1="32" y1="40" x2="68" y2="40"></line><line x1="32" y1="48" x2="68" y2="48"></line><line x1="32" y1="56" x2="68" y2="56"></line><line x1="32" y1="64" x2="68" y2="64"></line><line x1="32" y1="72" x2="68" y2="72"></line><circle cx="17" cy="40" r="2.6"></circle><circle cx="17" cy="52" r="2.6"></circle><circle cx="17" cy="64" r="2.6"></circle><circle cx="83" cy="40" r="2.6"></circle><circle cx="83" cy="52" r="2.6"></circle><circle cx="83" cy="64" r="2.6"></circle></svg></div>'+
    '<div class="music-mark">♪</div>'+
  '</div>'+
- '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
+ '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Resultado del mes',r.disponible)+'</div>'+
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
  '<button class="big secondary" onclick="openTransferencia()">↔ Transferir entre cuentas</button>'+
@@ -147,8 +147,18 @@ function renderCuentasHome(){
     '</div></div>'
   ).join('');
 
+  const resultadoMes=Number((DATA.resumen&&DATA.resumen.disponible)||0);
+  const diferencia=Number(s.total||0)-resultadoMes;
+  const concilia='<div class="accounts-total" style="margin-top:10px">'+
+    '<div class="label">Conciliación</div>'+
+    '<div class="sub" style="margin-top:6px">Resultado del mes: <b>'+money(resultadoMes)+'</b></div>'+
+    '<div class="sub">Disponible real: <b>'+money(s.total||0)+'</b></div>'+
+    '<div class="sub">Diferencia por conciliar: <b>'+money(diferencia)+'</b></div>'+
+  '</div>';
+
   return '<div class="accounts-grid">'+cards+'</div>'+
     '<div class="accounts-total"><div class="label">Total disponible real</div><div class="value">'+money(s.total||0)+'</div></div>'+
+    concilia+
     '<div class="summary-link"><button onclick="openSaldos()">'+(s.completas?'Actualizar saldos base':'Configurar saldos iniciales')+' →</button></div>';
 }
 
@@ -235,7 +245,7 @@ function renderResumen(){
 
   summaryContent.innerHTML=
     '<div class="summary">'+
-      mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+
+      mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Resultado del mes',r.disponible)+
     '</div>'+
     '<div class="summary-section"><h3>¿En qué gastaste?</h3>'+cats+'</div>'+
     '<div class="summary-section"><h3>Fijos vs variables</h3><div class="split">'+
