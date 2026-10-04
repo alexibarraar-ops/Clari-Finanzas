@@ -67,7 +67,13 @@ function guardarMovimiento(payload) {
 
 
 
+function validarSaldosConfigurados_() {
+  const s = getSaldosCuentas();
+  if (!s.completas) throw new Error('Primero configurá el saldo actual de todas las cuentas.');
+}
+
 function guardarTransferencia(payload) {
+  validarSaldosConfigurados_();
   validarTransferencia_(payload);
 
   const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
@@ -352,15 +358,29 @@ function normalizarTexto_(v) {
 
 
 function getSaldosCuentas() {
-  const cuentas = readObjects_(CLARI.SHEETS.CUENTAS).filter(r => isTrue_(r.ACTIVA));
+  const shCuentas = getSheet_(CLARI.SHEETS.CUENTAS);
+  const lastCuentaRow = shCuentas.getLastRow();
+  if (lastCuentaRow <= 1) return { cuentas: [], total: 0, completas: false };
+
+  const raw = shCuentas.getRange(2, 1, lastCuentaRow - 1, 6).getValues();
+  const cuentas = raw
+    .filter(r => isTrue_(r[3]))
+    .map(r => ({
+      ID_CUENTA: String(r[0] || '').trim(),
+      NOMBRE: String(r[1] || '').trim(),
+      TIPO: String(r[2] || '').trim(),
+      SALDO_BASE: Number(r[4] || 0),
+      CORTE_EN: r[5]
+    }));
+
   const shMov = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
   const lastRow = shMov.getLastRow();
   const movs = lastRow > 1 ? shMov.getRange(2, 1, lastRow - 1, 19).getValues() : [];
 
   const out = cuentas.map(c => {
-    const nombre = String(c.NOMBRE || '').trim();
-    const saldoBase = Number(String(c.SALDO_BASE || '0').replace(/\./g,'').replace(',','.')) || 0;
-    const corte = parseDateTime_(c.CORTE_EN);
+    const nombre = c.NOMBRE;
+    const saldoBase = Number(c.SALDO_BASE || 0);
+    const corte = c.CORTE_EN instanceof Date && !isNaN(c.CORTE_EN) ? c.CORTE_EN : parseDateTime_(c.CORTE_EN);
     let delta = 0;
 
     if (corte) {
@@ -384,9 +404,9 @@ function getSaldosCuentas() {
     }
 
     return {
-      id: String(c.ID_CUENTA || ''),
+      id: c.ID_CUENTA,
       nombre,
-      tipo: String(c.TIPO || ''),
+      tipo: c.TIPO,
       configurada: !!corte,
       saldoBase,
       saldoActual: saldoBase + delta,
@@ -397,7 +417,7 @@ function getSaldosCuentas() {
   return {
     cuentas: out,
     total: out.reduce((s,x) => s + Number(x.saldoActual || 0), 0),
-    completas: out.every(x => x.configurada)
+    completas: out.length > 0 && out.every(x => x.configurada)
   };
 }
 
@@ -406,21 +426,36 @@ function guardarSaldosBase(payload) {
 
   const sh = getSheet_(CLARI.SHEETS.CUENTAS);
   const lastRow = sh.getLastRow();
-  const ids = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 1).getDisplayValues() : [];
-  const rowById = {};
-  ids.forEach((r,i) => rowById[String(r[0] || '').trim()] = i + 2);
+  const activeRows = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 6).getValues() : [];
+  const activeIds = activeRows
+    .filter(r => isTrue_(r[3]))
+    .map(r => String(r[0] || '').trim());
 
-  const now = new Date();
-
+  const incoming = {};
   payload.cuentas.forEach(x => {
     const id = String(x.id || '').trim();
+    if (!id) return;
+    if (x.saldo === '' || x.saldo === null || typeof x.saldo === 'undefined') {
+      throw new Error('Completá todos los saldos. Si una cuenta está vacía, ingresá 0.');
+    }
+    const saldo = Number(x.saldo);
+    if (!isFinite(saldo)) throw new Error('Hay un saldo inválido.');
+    incoming[id] = saldo;
+  });
+
+  activeIds.forEach(id => {
+    if (!Object.prototype.hasOwnProperty.call(incoming, id)) {
+      throw new Error('Completá el saldo de todas las cuentas activas.');
+    }
+  });
+
+  const rowById = {};
+  activeRows.forEach((r,i) => rowById[String(r[0] || '').trim()] = i + 2);
+  const now = new Date();
+
+  activeIds.forEach(id => {
     const row = rowById[id];
-    if (!row) throw new Error('No encontré una de las cuentas.');
-
-    let saldo = Number(x.saldo);
-    if (!isFinite(saldo)) saldo = 0;
-
-    sh.getRange(row, 5, 1, 2).setValues([[saldo, now]]);
+    sh.getRange(row, 5, 1, 2).setValues([[incoming[id], now]]);
   });
 
   return getSaldosCuentas();
