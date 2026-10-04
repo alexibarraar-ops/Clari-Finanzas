@@ -36,7 +36,7 @@
     .seg button{border:0;background:transparent;padding:11px;border-radius:10px;font-weight:700}.seg .on{background:#fff}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 4px}
     input,select,textarea{width:100%;padding:13px;border:1px solid #dce8e5;border-radius:14px;background:#fff;font-size:16px}.save{background:var(--mint2);color:white;margin-top:8px}
     .mic{display:block;margin:28px auto 14px;width:90px;height:90px;border:0;border-radius:50%;font-size:34px;background:var(--mint)}.voiceText{text-align:center;min-height:54px;line-height:1.4}
-    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.summary-link{margin-top:14px;text-align:center}.summary-link button{border:0;background:transparent;color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center}.bar-name{font-size:13px}.bar-track{height:10px;background:#E7F1EF;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:var(--mint2);border-radius:99px}.bar-value{font-size:12px;font-weight:700}.summary-section{margin-top:18px}.summary-section h3{font-size:15px;margin:0 0 10px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pill-card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(36,65,60,.06)}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
+    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.manage-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #E8F0EE;cursor:pointer}.manage-row:last-child{border-bottom:0}.manage-main{font-weight:700}.manage-meta{font-size:12px;color:var(--muted);margin-top:3px}.manage-arrow{color:#8AA09A;font-size:20px}.admin-actions{display:flex;gap:10px;margin:12px 0}.admin-actions button{flex:1}.mini-btn{border:1px solid #DCE8E5;background:#fff;border-radius:14px;padding:12px 14px;font-weight:700;color:var(--ink)}.cat-editor{display:none;margin-top:14px}.cat-editor.show{display:block}.settings-link{margin-top:10px;text-align:center}.settings-link button{border:0;background:transparent;color:#5E7B74;font-weight:700;font-size:14px;cursor:pointer}.summary-link{margin-top:14px;text-align:center}.summary-link button{border:0;background:transparent;color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center}.bar-name{font-size:13px}.bar-track{height:10px;background:#E7F1EF;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:var(--mint2);border-radius:99px}.bar-value{font-size:12px;font-weight:700}.summary-section{margin-top:18px}.summary-section h3{font-size:15px;margin:0 0 10px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pill-card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(36,65,60,.06)}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
   </style>
 </head>
 <body>
@@ -70,9 +70,26 @@
   <div id="summaryContent"></div>
 </div></div>
 
+<div class="sheet" id="categoriesSheet"><div class="panel">
+  <div class="head"><h2>Categorías</h2><button class="close" onclick="closeSheet('categoriesSheet')">×</button></div>
+  <div class="admin-actions">
+    <button class="mini-btn" onclick="nuevaCategoria()">+ Nueva categoría</button>
+  </div>
+  <div id="categoriesList" class="card"></div>
+
+  <div id="catEditor" class="cat-editor">
+    <div class="section-kicker" id="catEditorTitle">Nueva categoría</div>
+    <div class="field"><label>Nombre</label><input id="catNombre" placeholder="Ej. Mascotas"></div>
+    <div class="field"><label>Tipo</label><select id="catTipo" onchange="toggleCatFijo()"><option value="GASTO">Gasto</option><option value="INGRESO">Ingreso</option></select></div>
+    <div class="field" id="catFijoWrap"><label>Tipo de gasto por defecto</label><select id="catFijo"><option value="VARIABLE">Variable</option><option value="FIJO">Fijo</option></select></div>
+    <button class="big save" id="catSaveBtn" onclick="guardarCategoriaUI(event)">Guardar categoría</button>
+    <button class="big danger" id="catDeleteBtn" style="display:none" onclick="eliminarCategoriaUI()">Eliminar categoría</button>
+  </div>
+</div></div>
+
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='';
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null;
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
 function init(d){DATA=d;fraseDelDia=normalizarFrase(d.frase||'Hoy también cuenta.');render();hydrate();handleVoiceReturn()}
@@ -92,6 +109,7 @@ function render(){
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
  '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
+ '<div class="settings-link"><button onclick="openCategorias()">⚙️ Administrar categorías</button></div>'+
  '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
  '<div class="footer-note">hecho para Clari · con ritmo y claridad</div>';
 }
@@ -436,6 +454,137 @@ function detectarConcepto(t,cat,cuentaDetectada){
   if(cat && /^(mercado|galicia|ciudad|personal|pago)$/.test(s)) return cat.NOMBRE;
 
   return s ? s.charAt(0).toUpperCase()+s.slice(1) : (cat ? cat.NOMBRE : 'Movimiento');
+}
+
+
+function openCategorias(){
+  editingCategoriaId=null;
+  catEditor.classList.remove('show');
+  google.script.run
+    .withSuccessHandler(list=>{
+      DATA.categorias=list||[];
+      renderCategoriasAdmin();
+      openSheet('categoriesSheet');
+    })
+    .withFailureHandler(x=>toast(x.message||x))
+    .getCategoriasAdmin();
+}
+
+function renderCategoriasAdmin(){
+  const list=DATA.categorias||[];
+  if(!list.length){
+    categoriesList.innerHTML='<div class="sub">No hay categorías activas.</div>';
+    return;
+  }
+
+  const grupos=['GASTO','INGRESO'];
+  categoriesList.innerHTML=grupos.map(t=>{
+    const items=list.filter(x=>String(x.TIPO).toUpperCase()===t);
+    if(!items.length) return '';
+    return '<div class="section-kicker">'+(t==='GASTO'?'Gastos':'Ingresos')+'</div>'+
+      items.map(x=>
+        '<div class="manage-row" onclick="editarCategoriaUI(\''+esc(x.ID_CATEGORIA)+'\')">'+
+          '<div><div class="manage-main">'+esc(x.NOMBRE)+'</div>'+
+          '<div class="manage-meta">'+(t==='GASTO'?(esc(x.FIJO_VARIABLE_DEFAULT||'VARIABLE')):'Ingreso')+'</div></div>'+
+          '<div class="manage-arrow">›</div>'+
+        '</div>'
+      ).join('');
+  }).join('');
+}
+
+function nuevaCategoria(){
+  editingCategoriaId=null;
+  catEditorTitle.textContent='Nueva categoría';
+  catNombre.value='';
+  catTipo.value='GASTO';
+  catFijo.value='VARIABLE';
+  catDeleteBtn.style.display='none';
+  catSaveBtn.textContent='Guardar categoría';
+  toggleCatFijo();
+  catEditor.classList.add('show');
+  catNombre.focus();
+}
+
+function editarCategoriaUI(id){
+  const x=(DATA.categorias||[]).find(c=>c.ID_CATEGORIA===id);
+  if(!x) return toast('No encontré esa categoría.');
+
+  editingCategoriaId=id;
+  catEditorTitle.textContent='Editar categoría';
+  catNombre.value=x.NOMBRE||'';
+  catTipo.value=String(x.TIPO||'GASTO').toUpperCase();
+  catFijo.value=x.FIJO_VARIABLE_DEFAULT||'VARIABLE';
+  catDeleteBtn.style.display='block';
+  catSaveBtn.textContent='Guardar cambios';
+  toggleCatFijo();
+  catEditor.classList.add('show');
+}
+
+function toggleCatFijo(){
+  catFijoWrap.style.display=catTipo.value==='GASTO'?'block':'none';
+}
+
+function guardarCategoriaUI(e){
+  const nombre=catNombre.value.trim();
+  if(!nombre) return toast('Ingresá un nombre.');
+
+  const p={
+    id:editingCategoriaId||'',
+    nombre,
+    tipo:catTipo.value,
+    fijoVariable:catTipo.value==='GASTO'?catFijo.value:''
+  };
+
+  const btn=e.currentTarget;
+  btn.disabled=true;
+  btn.textContent='Guardando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.categorias=r.categorias||[];
+      fillCategorias();
+      renderCategoriasAdmin();
+      editingCategoriaId=null;
+      catEditor.classList.remove('show');
+      btn.disabled=false;
+      btn.textContent='Guardar categoría';
+      toast('Categoría guardada.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;
+      btn.textContent=editingCategoriaId?'Guardar cambios':'Guardar categoría';
+      toast(x.message||x);
+    })
+    .guardarCategoria(p);
+}
+
+function eliminarCategoriaUI(){
+  if(!editingCategoriaId) return;
+  const x=(DATA.categorias||[]).find(c=>c.ID_CATEGORIA===editingCategoriaId);
+  if(!x) return;
+
+  if(!confirm('¿Eliminar la categoría "'+x.NOMBRE+'"?\n\nLos movimientos anteriores conservarán esta categoría.')) return;
+
+  catDeleteBtn.disabled=true;
+  catDeleteBtn.textContent='Eliminando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.categorias=r.categorias||[];
+      fillCategorias();
+      renderCategoriasAdmin();
+      editingCategoriaId=null;
+      catEditor.classList.remove('show');
+      catDeleteBtn.disabled=false;
+      catDeleteBtn.textContent='Eliminar categoría';
+      toast('Categoría eliminada.');
+    })
+    .withFailureHandler(x=>{
+      catDeleteBtn.disabled=false;
+      catDeleteBtn.textContent='Eliminar categoría';
+      toast(x.message||x);
+    })
+    .eliminarCategoria(editingCategoriaId);
 }
 
 function normalizarFrase(v){return String(v||'').replace(/\s+/g,' ').trim()||'Hoy también cuenta.'}
