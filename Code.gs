@@ -145,6 +145,61 @@ function guardarTransferencia(payload) {
   return { ok:true, id, transferenciaId, resumen:getResumenMes_(), ultimos:getUltimosMovimientos_(6) };
 }
 
+
+function guardarAjusteConciliacion(payload) {
+  if (!payload) throw new Error('No se recibió el ajuste.');
+
+  const monto = Number(payload.monto || 0);
+  const cuenta = String(payload.cuenta || '').trim();
+  const direccion = String(payload.direccion || '').toUpperCase();
+  const nota = String(payload.nota || '').trim();
+
+  if (!monto || monto <= 0) throw new Error('Ingresá un monto válido.');
+  if (!cuenta) throw new Error('Elegí la cuenta.');
+  if (!['SUMA','RESTA'].includes(direccion)) throw new Error('Dirección de ajuste inválida.');
+
+  const cuentas = readObjects_(CLARI.SHEETS.CUENTAS)
+    .filter(r => isTrue_(r.ACTIVA))
+    .map(r => String(r.NOMBRE || '').trim());
+
+  if (!cuentas.includes(cuenta)) throw new Error('La cuenta ya no está activa.');
+
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const id = 'MOV-' + Utilities.getUuid().slice(0, 8).toUpperCase();
+
+  sh.appendRow([
+    id,
+    Utilities.formatDate(now, tz, 'dd/MM/yyyy'),
+    Utilities.formatDate(now, tz, 'HH:mm:ss'),
+    'AJUSTE',
+    monto,
+    direccion === 'SUMA' ? 'Ajuste de saldo positivo' : 'Ajuste de saldo negativo',
+    'Ajuste de conciliación',
+    cuenta,
+    'AJUSTE',
+    '',
+    '',
+    'Clari',
+    nota || 'Ajuste por diferencia de conciliación',
+    'MANUAL',
+    '',
+    now,
+    now,
+    '',
+    ''
+  ]);
+
+  return {
+    ok: true,
+    id,
+    resumen: getResumenMes_(),
+    saldos: getSaldosCuentas(),
+    ultimos: getUltimosMovimientos_(6)
+  };
+}
+
 function validarTransferencia_(p) {
   if (!p) throw new Error('No se recibió la transferencia.');
   if (!p.monto || Number(p.monto) <= 0) throw new Error('Ingresá un monto válido.');
@@ -395,6 +450,11 @@ function getSaldosCuentas() {
 
         if (tipo === 'INGRESO' && cuentaOrigen === nombre) delta += monto;
         if (tipo === 'GASTO' && cuentaOrigen === nombre) delta -= monto;
+        if (tipo === 'AJUSTE' && cuentaOrigen === nombre) {
+          const concepto = String(r[5] || '').toLowerCase();
+          if (concepto.includes('positivo')) delta += monto;
+          else delta -= monto;
+        }
 
         if (tipo === 'TRANSFERENCIA') {
           if (cuentaOrigen === nombre) delta -= monto;
