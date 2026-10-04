@@ -20,7 +20,10 @@
     .brand{font-size:34px;line-height:1;font-weight:750;letter-spacing:-.035em}
     .month{font-size:14px;color:#52736B;margin-top:7px;font-weight:650}
     .quote{position:relative;z-index:1;color:#55726B;margin:18px 0 0;line-height:1.5;font-size:15px;max-width:360px}
-    .music-mark{position:absolute;right:24px;bottom:16px;font-size:22px;opacity:.35}\n    .bandoneon-mark{position:absolute;right:20px;top:18px;width:58px;height:58px;opacity:.16;pointer-events:none}\n    .bandoneon-mark svg{width:100%;height:100%;display:block}\n    .bandoneon-mark path,.bandoneon-mark rect,.bandoneon-mark line{stroke:#2F6E66;fill:none;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+    .music-mark{position:absolute;right:24px;bottom:16px;font-size:22px;opacity:.35}
+    .bandoneon-mark{position:absolute;right:24px;top:20px;width:64px;height:64px;opacity:.14;pointer-events:none;z-index:1}
+    .bandoneon-mark svg{width:100%;height:100%;display:block}
+    .bandoneon-mark rect,.bandoneon-mark line,.bandoneon-mark circle{stroke:#2F6E66;fill:none;stroke-width:5.5;stroke-linecap:round;stroke-linejoin:round}
     .section-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:#79918B;font-weight:700;margin:28px 2px 9px}
     .footer-note{text-align:center;color:#8AA09A;font-size:11px;margin:26px 0 4px;letter-spacing:.04em}
     .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.card{background:rgba(255,255,255,.96);border:1px solid #E4EFEC;border-radius:20px;padding:16px;box-shadow:0 8px 24px rgba(36,65,60,.06)}
@@ -82,6 +85,7 @@ function render(){
    '<div class="brand">Clari</div>'+
    '<div class="month">'+esc(mes)+'</div>'+
    '<div class="quote" id="fraseDia">“'+esc(fraseDelDia)+'”</div>'+
+   '<div class="bandoneon-mark" aria-hidden="true"><svg viewBox="0 0 100 100"><rect x="8" y="28" width="24" height="44" rx="5"></rect><rect x="68" y="28" width="24" height="44" rx="5"></rect><line x1="32" y1="32" x2="68" y2="32"></line><line x1="32" y1="40" x2="68" y2="40"></line><line x1="32" y1="48" x2="68" y2="48"></line><line x1="32" y1="56" x2="68" y2="56"></line><line x1="32" y1="64" x2="68" y2="64"></line><line x1="32" y1="72" x2="68" y2="72"></line><circle cx="17" cy="40" r="2.6"></circle><circle cx="17" cy="52" r="2.6"></circle><circle cx="17" cy="64" r="2.6"></circle><circle cx="83" cy="40" r="2.6"></circle><circle cx="83" cy="52" r="2.6"></circle><circle cx="83" cy="64" r="2.6"></circle></svg></div>'+
    '<div class="music-mark">♪</div>'+
  '</div>'+
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
