@@ -70,6 +70,17 @@
   <div id="summaryContent"></div>
 </div></div>
 
+<div class="sheet" id="transferSheet"><div class="panel">
+  <div class="head"><h2 id="transferTitle">Transferir entre cuentas</h2><button class="close" onclick="closeSheet('transferSheet')">×</button></div>
+  <div class="field"><label>Monto</label><input id="transferMonto" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Desde</label><select id="transferOrigen" onchange="fillTransferDestinos()"></select></div>
+  <div class="field"><label>Hacia</label><select id="transferDestino"></select></div>
+  <div class="field"><label>Fecha</label><input type="date" id="transferFecha"></div>
+  <div class="field"><label>Nota</label><textarea id="transferNota" placeholder="Opcional"></textarea></div>
+  <button class="big save" id="transferSaveBtn" onclick="guardarTransferenciaUI(event)">Guardar transferencia</button>
+  <button class="big danger" id="transferDeleteBtn" style="display:none" onclick="eliminarTransferenciaUI()">Eliminar transferencia</button>
+</div></div>
+
 <div class="sheet" id="categoriesSheet"><div class="panel">
   <div class="head"><h2>Categorías</h2><button class="close" onclick="closeSheet('categoriesSheet')">×</button></div>
   <div class="admin-actions">
@@ -89,7 +100,7 @@
 
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null;
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null,editingTransferId=null;
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
 function init(d){DATA=d;fraseDelDia=normalizarFrase(d.frase||'Hoy también cuenta.');render();hydrate();handleVoiceReturn()}
@@ -108,6 +119,7 @@ function render(){
  '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Disponible',r.disponible)+'</div>'+
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
+ '<button class="big secondary" onclick="openTransferencia()">↔ Transferir entre cuentas</button>'+
  '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
  '<div class="settings-link"><button onclick="openCategorias()">⚙️ Administrar categorías</button></div>'+
  '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
@@ -168,8 +180,16 @@ function barRow(nombre,monto,max){
 }
 
 function mini(l,v){return '<div class="card"><div class="label">'+l+'</div><div class="value">'+money(v)+'</div></div>'}
-function movs(a){if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';return a.map(m=>'<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>').join('')}
-function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');fillInstrumentos();fillCategorias()}
+function movs(a){
+  if(!a.length)return '<div class="sub">Todavía no hay movimientos.</div>';
+  return a.map(m=>{
+    if(String(m.tipo||'').toUpperCase()==='TRANSFERENCIA'){
+      return '<div class="mov" onclick="editarTransferenciaUI(\''+esc(m.id)+'\')"><div><b>Transferencia</b><div class="sub">'+esc(m.cuenta||'')+' → '+esc(m.cuentaDestino||'')+'</div></div><b>↔ '+money(m.monto)+'</b></div>';
+    }
+    return '<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>';
+  }).join('');
+}
+function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');transferOrigen.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');transferFecha.value=today();fillTransferDestinos();fillInstrumentos();fillCategorias()}
 function setTipo(t){tipo=t;gBtn.classList.toggle('on',t==='GASTO');iBtn.classList.toggle('on',t==='INGRESO');tipoWrap.style.display=t==='GASTO'?'block':'none';benWrap.style.display=t==='GASTO'?'block':'none';fillCategorias()}
 function fillCategorias(){let list=DATA.categorias.filter(x=>x.TIPO===tipo);categoria.innerHTML=list.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');categoria.onchange=()=>{let c=list.find(x=>x.NOMBRE===categoria.value);if(c&&c.FIJO_VARIABLE_DEFAULT&&tipo==='GASTO')tipoGasto.value=c.FIJO_VARIABLE_DEFAULT};if(list.length)categoria.onchange()}
 function fillInstrumentos(){let list=DATA.instrumentos.filter(x=>x.CUENTA===cuenta.value);instWrap.style.display=list.length?'block':'none';instrumento.innerHTML=list.map(x=>'<option data-medio="'+esc(x.MEDIO_PAGO)+'">'+esc(x.INSTRUMENTO)+'</option>').join('')}
@@ -456,6 +476,111 @@ function detectarConcepto(t,cat,cuentaDetectada){
   return s ? s.charAt(0).toUpperCase()+s.slice(1) : (cat ? cat.NOMBRE : 'Movimiento');
 }
 
+
+
+function openTransferencia(){
+  editingTransferId=null;
+  transferTitle.textContent='Transferir entre cuentas';
+  transferMonto.value='';
+  transferNota.value='';
+  transferFecha.value=today();
+  transferOrigen.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  fillTransferDestinos();
+  transferDeleteBtn.style.display='none';
+  transferSaveBtn.textContent='Guardar transferencia';
+  openSheet('transferSheet');
+}
+
+function fillTransferDestinos(){
+  const origen=transferOrigen.value;
+  const list=(DATA.cuentas||[]).filter(x=>x.NOMBRE!==origen);
+  const actual=transferDestino.value;
+  transferDestino.innerHTML=list.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  if(list.some(x=>x.NOMBRE===actual)) transferDestino.value=actual;
+}
+
+function guardarTransferenciaUI(e){
+  const p={
+    id:editingTransferId||'',
+    monto:parseMoney(transferMonto.value),
+    cuentaOrigen:transferOrigen.value,
+    cuentaDestino:transferDestino.value,
+    fecha:transferFecha.value,
+    nota:transferNota.value.trim(),
+    origen:'MANUAL',
+    textoOriginal:''
+  };
+
+  if(!p.monto) return toast('Ingresá un monto válido.');
+  if(!p.cuentaOrigen || !p.cuentaDestino) return toast('Elegí las dos cuentas.');
+  if(p.cuentaOrigen===p.cuentaDestino) return toast('Las cuentas deben ser distintas.');
+
+  const btn=e.currentTarget;
+  btn.disabled=true;
+  btn.textContent=editingTransferId?'Guardando cambios…':'Guardando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumen=r.resumen;
+      DATA.ultimos=r.ultimos;
+      closeSheet('transferSheet');
+      editingTransferId=null;
+      render();
+      btn.disabled=false;
+      btn.textContent='Guardar transferencia';
+      toast('Transferencia guardada.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;
+      btn.textContent=editingTransferId?'Guardar cambios':'Guardar transferencia';
+      toast(x.message||x);
+    })
+    .guardarTransferencia(p);
+}
+
+function editarTransferenciaUI(id){
+  const m=(DATA.ultimos||[]).find(x=>x.id===id);
+  if(!m) return toast('No encontré esa transferencia.');
+
+  editingTransferId=id;
+  transferTitle.textContent='Editar transferencia';
+  transferMonto.value=m.monto||'';
+  transferFecha.value=fechaIsoDesdeDisplay(m.fecha);
+  transferNota.value=m.nota||'';
+  transferOrigen.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  transferOrigen.value=m.cuenta||'';
+  fillTransferDestinos();
+  transferDestino.value=m.cuentaDestino||'';
+  transferDeleteBtn.style.display='block';
+  transferSaveBtn.textContent='Guardar cambios';
+  openSheet('transferSheet');
+}
+
+function eliminarTransferenciaUI(){
+  if(!editingTransferId) return;
+  if(!confirm('¿Eliminar esta transferencia?')) return;
+
+  transferDeleteBtn.disabled=true;
+  transferDeleteBtn.textContent='Eliminando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumen=r.resumen;
+      DATA.ultimos=r.ultimos;
+      closeSheet('transferSheet');
+      editingTransferId=null;
+      render();
+      transferDeleteBtn.disabled=false;
+      transferDeleteBtn.textContent='Eliminar transferencia';
+      toast('Transferencia eliminada.');
+    })
+    .withFailureHandler(x=>{
+      transferDeleteBtn.disabled=false;
+      transferDeleteBtn.textContent='Eliminar transferencia';
+      toast(x.message||x);
+    })
+    .eliminarMovimiento(editingTransferId);
+}
 
 function openCategorias(){
   editingCategoriaId=null;
