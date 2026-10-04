@@ -1,0 +1,12 @@
+# Solo código de Apps Script
+docs/**
+scripts/**
+.git/**
+.gitignore
+README.md
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.webmanifest
+sw.js
