@@ -165,9 +165,13 @@ function guardarSaldosBaseUI(e){
   const payload={
     cuentas:inputs.map(i=>({
       id:i.dataset.id,
-      saldo:parseMoney(i.value)
+      saldo:String(i.value||'').trim()===''?'':parseMoney(i.value)
     }))
   };
+
+  if(payload.cuentas.some(x=>x.saldo==='')){
+    return toast('Completá todos los saldos. Si una cuenta está vacía, ingresá 0.');
+  }
 
   const btn=e.currentTarget;
   btn.disabled=true;
@@ -554,6 +558,7 @@ function detectarConcepto(t,cat,cuentaDetectada){
 
 
 function openTransferencia(){
+  if(!DATA.saldos || !DATA.saldos.completas) return toast('Primero configurá el saldo actual de todas las cuentas.');
   editingTransferId=null;
   transferTitle.textContent='Transferir entre cuentas';
   transferMonto.value='';
