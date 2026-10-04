@@ -1,5 +1,5 @@
-const CACHE='clari-finanzas-pwa-v1';
-const ASSETS=['./','./index.html','./manifest.webmanifest','./icon.svg'];
+const CACHE='clari-finanzas-pwa-v2';
+const ASSETS=['./','./index.html','./manifest.webmanifest','./clari-icon-192.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
   self.skipWaiting();
