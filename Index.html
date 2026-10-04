@@ -65,6 +65,16 @@
   <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
 </div></div>
 
+<div class="sheet" id="adjustSheet"><div class="panel">
+  <div class="head"><h2>Registrar ajuste</h2><button class="close" onclick="closeSheet('adjustSheet')">×</button></div>
+  <div class="sub" style="margin:8px 0 16px">Usalo solo cuando no puedas identificar el movimiento real que explica la diferencia.</div>
+  <div class="field"><label>Monto</label><input id="adjustMonto" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Cuenta</label><select id="adjustCuenta"></select></div>
+  <div class="field"><label>Tipo de ajuste</label><select id="adjustDireccion"><option value="RESTA">Restar saldo</option><option value="SUMA">Sumar saldo</option></select></div>
+  <div class="field"><label>Motivo / nota</label><textarea id="adjustNota" placeholder="Ej. diferencia no identificada al conciliar"></textarea></div>
+  <button class="big save" id="adjustSaveBtn" onclick="guardarAjusteUI(event)">Guardar ajuste</button>
+</div></div>
+
 <div class="sheet" id="balancesSheet"><div class="panel">
   <div class="head"><h2>Saldos de cuentas</h2><button class="close" onclick="closeSheet('balancesSheet')">×</button></div>
   <div class="sub" style="margin:8px 0 16px">Ingresá cuánto hay realmente ahora en cada cuenta. Este valor será el punto de partida para calcular los saldos futuros.</div>
@@ -135,6 +145,52 @@ function render(){
 }
 
 
+
+function openAjusteConciliacion(){
+  const s=DATA.saldos||{total:0};
+  const resultadoMes=Number((DATA.resumen&&DATA.resumen.disponible)||0);
+  const diferencia=Number(s.total||0)-resultadoMes;
+
+  adjustMonto.value=Math.abs(Math.round(diferencia));
+  adjustDireccion.value=diferencia<0?'SUMA':'RESTA';
+  adjustCuenta.innerHTML=(DATA.cuentas||[]).map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  adjustNota.value='Diferencia detectada en conciliación';
+  openSheet('adjustSheet');
+}
+
+function guardarAjusteUI(e){
+  const p={
+    monto:parseMoney(adjustMonto.value),
+    cuenta:adjustCuenta.value,
+    direccion:adjustDireccion.value,
+    nota:adjustNota.value.trim()
+  };
+
+  if(!p.monto) return toast('Ingresá un monto válido.');
+
+  const btn=e.currentTarget;
+  btn.disabled=true;
+  btn.textContent='Guardando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumen=r.resumen;
+      DATA.saldos=r.saldos;
+      DATA.ultimos=r.ultimos;
+      closeSheet('adjustSheet');
+      render();
+      btn.disabled=false;
+      btn.textContent='Guardar ajuste';
+      toast('Ajuste registrado.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;
+      btn.textContent='Guardar ajuste';
+      toast(x.message||x);
+    })
+    .guardarAjusteConciliacion(p);
+}
+
 function renderCuentasHome(){
   const s=DATA.saldos||{cuentas:[],total:0,completas:false};
   if(!s.cuentas || !s.cuentas.length){
@@ -154,6 +210,7 @@ function renderCuentasHome(){
     '<div class="sub" style="margin-top:6px">Resultado del mes: <b>'+money(resultadoMes)+'</b></div>'+
     '<div class="sub">Disponible real: <b>'+money(s.total||0)+'</b></div>'+
     '<div class="sub">Diferencia por conciliar: <b>'+money(diferencia)+'</b></div>'+
+    '<div class="summary-link"><button onclick="openAjusteConciliacion()">Registrar ajuste →</button></div>'+
   '</div>';
 
   return '<div class="accounts-grid">'+cards+'</div>'+
@@ -270,6 +327,10 @@ function movs(a){
   return a.map(m=>{
     if(String(m.tipo||'').toUpperCase()==='TRANSFERENCIA'){
       return '<div class="mov" onclick="editarTransferenciaUI(\''+esc(m.id)+'\')"><div><b>Transferencia</b><div class="sub">'+esc(m.cuenta||'')+' → '+esc(m.cuentaDestino||'')+'</div></div><b>↔ '+money(m.monto)+'</b></div>';
+    }
+    if(String(m.tipo||'').toUpperCase()==='AJUSTE'){
+      const positivo=String(m.concepto||'').toLowerCase().includes('positivo');
+      return '<div class="mov"><div><b>Ajuste de conciliación</b><div class="sub">'+esc(m.cuenta||'')+' · '+esc(m.nota||'')+'</div></div><b>'+(positivo?'+':'-')+money(m.monto)+'</b></div>';
     }
     return '<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>';
   }).join('');
