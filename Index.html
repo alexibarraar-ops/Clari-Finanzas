@@ -36,7 +36,7 @@
     .seg button{border:0;background:transparent;padding:11px;border-radius:10px;font-weight:700}.seg .on{background:#fff}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px 4px}
     input,select,textarea{width:100%;padding:13px;border:1px solid #dce8e5;border-radius:14px;background:#fff;font-size:16px}.save{background:var(--mint2);color:white;margin-top:8px}
     .mic{display:block;margin:28px auto 14px;width:90px;height:90px;border:0;border-radius:50%;font-size:34px;background:var(--mint)}.voiceText{text-align:center;min-height:54px;line-height:1.4}
-    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.manage-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #E8F0EE;cursor:pointer}.manage-row:last-child{border-bottom:0}.manage-main{font-weight:700}.manage-meta{font-size:12px;color:var(--muted);margin-top:3px}.manage-arrow{color:#8AA09A;font-size:20px}.admin-actions{display:flex;gap:10px;margin:12px 0}.admin-actions button{flex:1}.mini-btn{border:1px solid #DCE8E5;background:#fff;border-radius:14px;padding:12px 14px;font-weight:700;color:var(--ink)}.cat-editor{display:none;margin-top:14px}.cat-editor.show{display:block}.settings-link{margin-top:10px;text-align:center}.settings-link button{border:0;background:transparent;color:#5E7B74;font-weight:700;font-size:14px;cursor:pointer}.summary-link{margin-top:14px;text-align:center}.summary-link button{border:0;background:transparent;color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center}.bar-name{font-size:13px}.bar-track{height:10px;background:#E7F1EF;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:var(--mint2);border-radius:99px}.bar-value{font-size:12px;font-weight:700}.summary-section{margin-top:18px}.summary-section h3{font-size:15px;margin:0 0 10px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pill-card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(36,65,60,.06)}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
+    .danger{background:#fff;color:#A64B4B;border:1px solid #E7CACA;margin-top:10px}.mov{cursor:pointer}.manage-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #E8F0EE;cursor:pointer}.manage-row:last-child{border-bottom:0}.manage-main{font-weight:700}.manage-meta{font-size:12px;color:var(--muted);margin-top:3px}.manage-arrow{color:#8AA09A;font-size:20px}.admin-actions{display:flex;gap:10px;margin:12px 0}.admin-actions button{flex:1}.mini-btn{border:1px solid #DCE8E5;background:#fff;border-radius:14px;padding:12px 14px;font-weight:700;color:var(--ink)}.cat-editor{display:none;margin-top:14px}.cat-editor.show{display:block}.settings-link{margin-top:10px;text-align:center}.settings-link button{border:0;background:transparent;color:#5E7B74;font-weight:700;font-size:14px;cursor:pointer}.accounts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.account-card{background:#fff;border:1px solid #E4EFEC;border-radius:18px;padding:14px}.account-name{font-size:12px;color:var(--muted)}.account-balance{font-size:18px;font-weight:750;margin-top:5px}.accounts-total{margin-top:10px;background:#EAF8F5;border:1px solid #D6ECE7;border-radius:18px;padding:14px}.summary-link{margin-top:14px;text-align:center}.summary-link button{border:0;background:transparent;color:var(--ink);font-weight:700;font-size:15px;cursor:pointer}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center}.bar-name{font-size:13px}.bar-track{height:10px;background:#E7F1EF;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:var(--mint2);border-radius:99px}.bar-value{font-size:12px;font-weight:700}.summary-section{margin-top:18px}.summary-section h3{font-size:15px;margin:0 0 10px}.split{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pill-card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(36,65,60,.06)}.notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 15px;border-radius:13px;display:none}.notice.show{display:block}
   </style>
 </head>
 <body>
@@ -63,6 +63,13 @@
   <button class="mic" id="mic" onclick="toggleVoice()">🎙️</button>
   <div class="voiceText" id="voiceText">Tocá el micrófono y contame qué movimiento hiciste.</div>
   <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
+</div></div>
+
+<div class="sheet" id="balancesSheet"><div class="panel">
+  <div class="head"><h2>Saldos de cuentas</h2><button class="close" onclick="closeSheet('balancesSheet')">×</button></div>
+  <div class="sub" style="margin:8px 0 16px">Ingresá cuánto hay realmente ahora en cada cuenta. Este valor será el punto de partida para calcular los saldos futuros.</div>
+  <div id="balancesForm"></div>
+  <button class="big save" id="balancesSaveBtn" onclick="guardarSaldosBaseUI(event)">Guardar saldos actuales</button>
 </div></div>
 
 <div class="sheet" id="summarySheet"><div class="panel">
@@ -120,10 +127,74 @@ function render(){
  '<button class="big voice" onclick="openVoiceExternal()">🎙️ Decir un movimiento</button>'+
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
  '<button class="big secondary" onclick="openTransferencia()">↔ Transferir entre cuentas</button>'+
+ '<div class="section-kicker">Mis cuentas</div>'+renderCuentasHome()+
  '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
  '<div class="settings-link"><button onclick="openCategorias()">⚙️ Administrar categorías</button></div>'+
  '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
  '<div class="footer-note">hecho para Clari · con ritmo y claridad</div>';
+}
+
+
+function renderCuentasHome(){
+  const s=DATA.saldos||{cuentas:[],total:0,completas:false};
+  if(!s.cuentas || !s.cuentas.length){
+    return '<div class="card"><div class="sub">Todavía no hay cuentas configuradas.</div></div>';
+  }
+
+  const cards=s.cuentas.map(x=>
+    '<div class="account-card"><div class="account-name">'+esc(x.nombre)+'</div><div class="account-balance">'+
+    (x.configurada?money(x.saldoActual):'Sin saldo inicial')+
+    '</div></div>'
+  ).join('');
+
+  return '<div class="accounts-grid">'+cards+'</div>'+
+    '<div class="accounts-total"><div class="label">Total disponible real</div><div class="value">'+money(s.total||0)+'</div></div>'+
+    '<div class="summary-link"><button onclick="openSaldos()">'+(s.completas?'Actualizar saldos base':'Configurar saldos iniciales')+' →</button></div>';
+}
+
+function openSaldos(){
+  const cuentas=(DATA.saldos&&DATA.saldos.cuentas)||[];
+  balancesForm.innerHTML=cuentas.map(x=>
+    '<div class="field"><label>'+esc(x.nombre)+'</label><input inputmode="decimal" data-id="'+esc(x.id)+'" value="'+(x.configurada?String(x.saldoActual):'')+'" placeholder="$ 0"></div>'
+  ).join('');
+  openSheet('balancesSheet');
+}
+
+function guardarSaldosBaseUI(e){
+  const inputs=[...balancesForm.querySelectorAll('input[data-id]')];
+  const payload={
+    cuentas:inputs.map(i=>({
+      id:i.dataset.id,
+      saldo:parseMoney(i.value)
+    }))
+  };
+
+  const btn=e.currentTarget;
+  btn.disabled=true;
+  btn.textContent='Guardando…';
+
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.saldos=r;
+      closeSheet('balancesSheet');
+      render();
+      btn.disabled=false;
+      btn.textContent='Guardar saldos actuales';
+      toast('Saldos actualizados.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;
+      btn.textContent='Guardar saldos actuales';
+      toast(x.message||x);
+    })
+    .guardarSaldosBase(payload);
+}
+
+function refrescarSaldos(){
+  google.script.run
+    .withSuccessHandler(r=>{DATA.saldos=r;render()})
+    .withFailureHandler(()=>{})
+    .getSaldosCuentas();
 }
 
 function openResumen(){
@@ -224,6 +295,7 @@ function guardar(e){
     .withSuccessHandler(r=>{
       DATA.resumen=r.resumen;
       DATA.ultimos=r.ultimos;
+      if(r.saldos) DATA.saldos=r.saldos;
       closeSheet('formSheet');
       editingId=null;
       voiceRaw='';
@@ -231,6 +303,7 @@ function guardar(e){
       btn.disabled=false;
       btn.textContent='Guardar movimiento';
       toast('Movimiento guardado.');
+      refrescarSaldos();
     })
     .withFailureHandler(x=>{
       btn.disabled=false;
@@ -284,12 +357,14 @@ function eliminarActual(){
     .withSuccessHandler(r=>{
       DATA.resumen=r.resumen;
       DATA.ultimos=r.ultimos;
+      if(r.saldos) DATA.saldos=r.saldos;
       closeSheet('formSheet');
       editingId=null;
       render();
       deleteBtn.disabled=false;
       deleteBtn.textContent='Eliminar movimiento';
       toast('Movimiento eliminado.');
+      refrescarSaldos();
     })
     .withFailureHandler(x=>{
       deleteBtn.disabled=false;
@@ -523,12 +598,14 @@ function guardarTransferenciaUI(e){
     .withSuccessHandler(r=>{
       DATA.resumen=r.resumen;
       DATA.ultimos=r.ultimos;
+      if(r.saldos) DATA.saldos=r.saldos;
       closeSheet('transferSheet');
       editingTransferId=null;
       render();
       btn.disabled=false;
       btn.textContent='Guardar transferencia';
       toast('Transferencia guardada.');
+      refrescarSaldos();
     })
     .withFailureHandler(x=>{
       btn.disabled=false;
@@ -567,12 +644,14 @@ function eliminarTransferenciaUI(){
     .withSuccessHandler(r=>{
       DATA.resumen=r.resumen;
       DATA.ultimos=r.ultimos;
+      if(r.saldos) DATA.saldos=r.saldos;
       closeSheet('transferSheet');
       editingTransferId=null;
       render();
       transferDeleteBtn.disabled=false;
       transferDeleteBtn.textContent='Eliminar transferencia';
       toast('Transferencia eliminada.');
+      refrescarSaldos();
     })
     .withFailureHandler(x=>{
       transferDeleteBtn.disabled=false;
