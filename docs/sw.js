@@ -1,5 +1,5 @@
-const CACHE='clari-finanzas-pwa-v2';
-const ASSETS=['./','./index.html','./manifest.webmanifest','./clari-icon-192.png'];
+const CACHE='clari-finanzas-pwa-v3';
+const ASSETS=['./','./index.html','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
   self.skipWaiting();
@@ -9,6 +9,6 @@ self.addEventListener('activate',event=>{
   self.clients.claim();
 });
 self.addEventListener('fetch',event=>{
-  if(event.request.method!=='GET')return;
+  if(event.request.method!=='GET') return;
   event.respondWith(caches.match(event.request).then(hit=>hit||fetch(event.request)));
 });
