@@ -130,6 +130,132 @@ function buscarFilaMovimiento_(id) {
   return 0;
 }
 
+
+function getCategoriasAdmin() {
+  return readObjects_(CLARI.SHEETS.CATEGORIAS)
+    .filter(r => isTrue_(r.ACTIVA))
+    .map(r => ({
+      ID_CATEGORIA: String(r.ID_CATEGORIA || ''),
+      NOMBRE: String(r.NOMBRE || ''),
+      TIPO: String(r.TIPO || '').toUpperCase(),
+      FIJO_VARIABLE_DEFAULT: String(r.FIJO_VARIABLE_DEFAULT || '').toUpperCase(),
+      ACTIVA: String(r.ACTIVA || '')
+    }))
+    .sort((a,b) => {
+      if (a.TIPO !== b.TIPO) return a.TIPO.localeCompare(b.TIPO);
+      return a.NOMBRE.localeCompare(b.NOMBRE, 'es');
+    });
+}
+
+function guardarCategoria(payload) {
+  if (!payload) throw new Error('No se recibió la categoría.');
+
+  const nombre = String(payload.nombre || '').trim();
+  const tipo = String(payload.tipo || '').toUpperCase();
+  const fijoVariable = tipo === 'GASTO'
+    ? String(payload.fijoVariable || 'VARIABLE').toUpperCase()
+    : '';
+
+  if (!nombre) throw new Error('Ingresá un nombre para la categoría.');
+  if (!['GASTO','INGRESO'].includes(tipo)) throw new Error('Tipo de categoría inválido.');
+  if (tipo === 'GASTO' && !['FIJO','VARIABLE'].includes(fijoVariable)) {
+    throw new Error('Elegí FIJO o VARIABLE.');
+  }
+
+  const sh = getSheet_(CLARI.SHEETS.CATEGORIAS);
+  const lastRow = sh.getLastRow();
+  const rows = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 5).getDisplayValues() : [];
+  const id = String(payload.id || '').trim();
+  const nombreNorm = normalizarTexto_(nombre);
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowId = String(rows[i][0] || '').trim();
+    const rowNombre = normalizarTexto_(rows[i][1]);
+    const rowTipo = String(rows[i][2] || '').toUpperCase();
+    const activa = isTrue_(rows[i][4]);
+
+    if (activa && rowId !== id && rowTipo === tipo && rowNombre === nombreNorm) {
+      throw new Error('Ya existe una categoría con ese nombre.');
+    }
+  }
+
+  if (id) {
+    const row = buscarFilaCategoria_(id);
+    if (!row) throw new Error('No encontré la categoría a editar.');
+    sh.getRange(row, 2, 1, 4).setValues([[
+      nombre,
+      tipo,
+      fijoVariable,
+      true
+    ]]);
+  } else {
+    sh.appendRow([
+      siguienteCategoriaId_(),
+      nombre,
+      tipo,
+      fijoVariable,
+      true
+    ]);
+  }
+
+  return {
+    ok: true,
+    categorias: getCategoriasAdmin()
+  };
+}
+
+function eliminarCategoria(id) {
+  if (!id) throw new Error('Falta el ID de la categoría.');
+
+  const row = buscarFilaCategoria_(id);
+  if (!row) throw new Error('No encontré la categoría.');
+
+  const sh = getSheet_(CLARI.SHEETS.CATEGORIAS);
+  sh.getRange(row, 5).setValue(false);
+
+  return {
+    ok: true,
+    categorias: getCategoriasAdmin()
+  };
+}
+
+function buscarFilaCategoria_(id) {
+  const sh = getSheet_(CLARI.SHEETS.CATEGORIAS);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) return 0;
+
+  const ids = sh.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
+  const target = String(id || '').trim();
+
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() === target) return i + 2;
+  }
+  return 0;
+}
+
+function siguienteCategoriaId_() {
+  const sh = getSheet_(CLARI.SHEETS.CATEGORIAS);
+  const lastRow = sh.getLastRow();
+  let max = 0;
+
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, 1).getDisplayValues().forEach(r => {
+      const m = String(r[0] || '').match(/^CAT-(\d+)$/i);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+  }
+
+  return 'CAT-' + String(max + 1).padStart(3, '0');
+}
+
+function normalizarTexto_(v) {
+  return String(v || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 function getConfig_() {
   const out = {};
   readObjects_(CLARI.SHEETS.CONFIG).forEach(r => { if (r.CLAVE) out[String(r.CLAVE)] = r.VALOR; });
