@@ -1,17 +1,18 @@
 {
+  "id": "./?install=v4",
   "name": "Clari Finanzas",
   "short_name": "Clari",
-  "start_url": "./",
+  "start_url": "./?install=v4",
   "scope": "./",
   "display": "standalone",
   "background_color": "#F7FBFA",
   "theme_color": "#A8DDD3",
   "icons": [
     {
-      "src": "./clari-icon-192.png",
+      "src": "./clari-icon-192.png?v=4",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
