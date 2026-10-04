@@ -29,6 +29,7 @@ function getBootstrapData() {
     frase: getFraseDelDia_(),
     resumen: getResumenMes_(),
     resumenDetallado: getResumenDetallado_(),
+    saldos: getSaldosCuentas(),
     ultimos: getUltimosMovimientos_(6)
   };
 }
@@ -347,6 +348,94 @@ function normalizarTexto_(v) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
+}
+
+
+function getSaldosCuentas() {
+  const cuentas = readObjects_(CLARI.SHEETS.CUENTAS).filter(r => isTrue_(r.ACTIVA));
+  const shMov = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastRow = shMov.getLastRow();
+  const movs = lastRow > 1 ? shMov.getRange(2, 1, lastRow - 1, 19).getValues() : [];
+
+  const out = cuentas.map(c => {
+    const nombre = String(c.NOMBRE || '').trim();
+    const saldoBase = Number(String(c.SALDO_BASE || '0').replace(/\./g,'').replace(',','.')) || 0;
+    const corte = parseDateTime_(c.CORTE_EN);
+    let delta = 0;
+
+    if (corte) {
+      movs.forEach(r => {
+        const creadoEn = r[15] instanceof Date ? r[15] : parseDateTime_(r[15]);
+        if (!creadoEn || creadoEn <= corte) return;
+
+        const tipo = String(r[3] || '').toUpperCase();
+        const monto = Number(r[4] || 0);
+        const cuentaOrigen = String(r[7] || '').trim();
+        const cuentaDestino = String(r[17] || '').trim();
+
+        if (tipo === 'INGRESO' && cuentaOrigen === nombre) delta += monto;
+        if (tipo === 'GASTO' && cuentaOrigen === nombre) delta -= monto;
+
+        if (tipo === 'TRANSFERENCIA') {
+          if (cuentaOrigen === nombre) delta -= monto;
+          if (cuentaDestino === nombre) delta += monto;
+        }
+      });
+    }
+
+    return {
+      id: String(c.ID_CUENTA || ''),
+      nombre,
+      tipo: String(c.TIPO || ''),
+      configurada: !!corte,
+      saldoBase,
+      saldoActual: saldoBase + delta,
+      corteEn: corte ? Utilities.formatDate(corte, Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy HH:mm:ss') : ''
+    };
+  });
+
+  return {
+    cuentas: out,
+    total: out.reduce((s,x) => s + Number(x.saldoActual || 0), 0),
+    completas: out.every(x => x.configurada)
+  };
+}
+
+function guardarSaldosBase(payload) {
+  if (!payload || !Array.isArray(payload.cuentas)) throw new Error('No se recibieron los saldos.');
+
+  const sh = getSheet_(CLARI.SHEETS.CUENTAS);
+  const lastRow = sh.getLastRow();
+  const ids = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, 1).getDisplayValues() : [];
+  const rowById = {};
+  ids.forEach((r,i) => rowById[String(r[0] || '').trim()] = i + 2);
+
+  const now = new Date();
+
+  payload.cuentas.forEach(x => {
+    const id = String(x.id || '').trim();
+    const row = rowById[id];
+    if (!row) throw new Error('No encontré una de las cuentas.');
+
+    let saldo = Number(x.saldo);
+    if (!isFinite(saldo)) saldo = 0;
+
+    sh.getRange(row, 5, 1, 2).setValues([[saldo, now]]);
+  });
+
+  return getSaldosCuentas();
+}
+
+function parseDateTime_(value) {
+  if (value instanceof Date && !isNaN(value)) return value;
+  const s = String(value || '').trim();
+  if (!s) return null;
+
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6] || 0));
+
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
 }
 
 function getConfig_() {
