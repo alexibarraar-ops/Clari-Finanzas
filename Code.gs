@@ -65,6 +65,99 @@ function guardarMovimiento(payload) {
 }
 
 
+
+function guardarTransferencia(payload) {
+  validarTransferencia_(payload);
+
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const fecha = payload.fecha ? new Date(payload.fecha + 'T12:00:00') : now;
+  const editId = String(payload.id || '').trim();
+
+  if (editId) {
+    const row = buscarFilaMovimiento_(editId);
+    if (!row) throw new Error('No encontré la transferencia a editar.');
+
+    const tipoActual = String(sh.getRange(row, 4).getDisplayValue() || '').toUpperCase();
+    if (tipoActual !== 'TRANSFERENCIA') throw new Error('El movimiento no es una transferencia.');
+
+    const creadoEn = sh.getRange(row, 16).getValue() || now;
+    const transferenciaId = sh.getRange(row, 19).getDisplayValue() || ('TRF-' + Utilities.getUuid().slice(0, 8).toUpperCase());
+
+    sh.getRange(row, 1, 1, 19).setValues([[
+      editId,
+      Utilities.formatDate(fecha, tz, 'dd/MM/yyyy'),
+      Utilities.formatDate(now, tz, 'HH:mm:ss'),
+      'TRANSFERENCIA',
+      Number(payload.monto),
+      'Transferencia a ' + String(payload.cuentaDestino || '').trim(),
+      'Transferencia entre cuentas',
+      String(payload.cuentaOrigen || '').trim(),
+      'TRANSFERENCIA',
+      '',
+      '',
+      'Clari',
+      String(payload.nota || '').trim(),
+      String(payload.origen || 'MANUAL').toUpperCase(),
+      String(payload.textoOriginal || '').trim(),
+      creadoEn,
+      now,
+      String(payload.cuentaDestino || '').trim(),
+      transferenciaId
+    ]]);
+
+    return { ok:true, id:editId, transferenciaId, resumen:getResumenMes_(), ultimos:getUltimosMovimientos_(6) };
+  }
+
+  const id = 'MOV-' + Utilities.getUuid().slice(0, 8).toUpperCase();
+  const transferenciaId = 'TRF-' + Utilities.getUuid().slice(0, 8).toUpperCase();
+
+  sh.appendRow([
+    id,
+    Utilities.formatDate(fecha, tz, 'dd/MM/yyyy'),
+    Utilities.formatDate(now, tz, 'HH:mm:ss'),
+    'TRANSFERENCIA',
+    Number(payload.monto),
+    'Transferencia a ' + String(payload.cuentaDestino || '').trim(),
+    'Transferencia entre cuentas',
+    String(payload.cuentaOrigen || '').trim(),
+    'TRANSFERENCIA',
+    '',
+    '',
+    'Clari',
+    String(payload.nota || '').trim(),
+    String(payload.origen || 'MANUAL').toUpperCase(),
+    String(payload.textoOriginal || '').trim(),
+    now,
+    now,
+    String(payload.cuentaDestino || '').trim(),
+    transferenciaId
+  ]);
+
+  return { ok:true, id, transferenciaId, resumen:getResumenMes_(), ultimos:getUltimosMovimientos_(6) };
+}
+
+function validarTransferencia_(p) {
+  if (!p) throw new Error('No se recibió la transferencia.');
+  if (!p.monto || Number(p.monto) <= 0) throw new Error('Ingresá un monto válido.');
+
+  const origen = String(p.cuentaOrigen || '').trim();
+  const destino = String(p.cuentaDestino || '').trim();
+
+  if (!origen) throw new Error('Elegí la cuenta de origen.');
+  if (!destino) throw new Error('Elegí la cuenta de destino.');
+  if (origen === destino) throw new Error('La cuenta de origen y destino deben ser distintas.');
+
+  const cuentas = readObjects_(CLARI.SHEETS.CUENTAS)
+    .filter(r => isTrue_(r.ACTIVA))
+    .map(r => String(r.NOMBRE || '').trim());
+
+  if (!cuentas.includes(origen) || !cuentas.includes(destino)) {
+    throw new Error('Una de las cuentas ya no está activa.');
+  }
+}
+
 function actualizarMovimiento(payload) {
   validarMovimiento_(payload);
   if (!payload.id) throw new Error('Falta el ID del movimiento.');
@@ -275,11 +368,12 @@ function getUltimosMovimientos_(limite) {
   if (lastRow <= 1) return [];
   const count = Math.min(Number(limite || 6), lastRow - 1);
   const start = Math.max(2, lastRow - count + 1);
-  return sh.getRange(start, 1, count, 17).getDisplayValues().reverse().map(r => ({
+  return sh.getRange(start, 1, count, 19).getDisplayValues().reverse().map(r => ({
     id:r[0], fecha:r[1], hora:r[2], tipo:r[3],
     monto:Number(String(r[4]).replace(/\./g,'').replace(',','.'))||0,
     concepto:r[5], categoria:r[6], cuenta:r[7], medioPago:r[8],
-    instrumento:r[9], tipoGasto:r[10], beneficiario:r[11], nota:r[12], origen:r[13]
+    instrumento:r[9], tipoGasto:r[10], beneficiario:r[11], nota:r[12], origen:r[13],
+    cuentaDestino:r[17], transferenciaId:r[18]
   }));
 }
 
