@@ -3,27 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Clari Finanzas</title>
   <meta name="theme-color" content="#A8DDD3">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="application-name" content="Clari Finanzas">
   <meta name="apple-mobile-web-app-title" content="Clari">
-  <link rel="icon" type="image/png" sizes="192x192" href="./clari-icon-192.png?v=4">
-  <link rel="apple-touch-icon" sizes="192x192" href="./clari-icon-192.png?v=4">\n  <link rel="apple-touch-icon-precomposed" href="./clari-icon-192.png?v=4">\n  <link rel="shortcut icon" href="./clari-icon-192.png?v=4">
-  <link rel="manifest" href="./manifest.webmanifest?v=4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <title>Clari Finanzas</title>
   <style>
-    html,body{margin:0;width:100%;height:100%;background:#F7FBFA;overflow:hidden}
-    iframe{border:0;width:100%;height:100%;display:block;background:#F7FBFA}
+    :root{--bg:#F7FBFA;--card:#ffffff;--ink:#24413C;--muted:#6C817C;--mint:#A8DDD3;--mint2:#78BDB0;--line:#DCEBE7}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,#F4FBF9,#F9FCFB);color:var(--ink);font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:min(430px,100%);background:var(--card);border:1px solid var(--line);border-radius:28px;padding:28px;box-shadow:0 18px 55px rgba(36,65,60,.12);text-align:center}
+    .brand img{width:108px;height:108px;border-radius:28px;margin-bottom:16px}
+    .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#78908A;font-weight:700;margin-bottom:8px}
+    h1{font-size:31px;margin:0;letter-spacing:-.03em}
+    .sub{margin:7px 0 22px;color:var(--muted);font-size:14px}
+    .status{padding:14px;border-radius:16px;background:#F1F8F6;color:#607A74;font-size:13px;line-height:1.5;margin-bottom:16px}
+    button{width:100%;padding:16px;border:0;border-radius:16px;font-size:16px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--mint),#94D1C5);color:var(--ink)}
+    .small{font-size:11px;color:#829892;line-height:1.5;margin-top:16px}
   </style>
 </head>
 <body>
-  <iframe id="app" title="Clari Finanzas" allow="microphone"></iframe>
-  <script>
-    const APP='https://script.google.com/macros/s/AKfycbzUuwzw3ytKRSajB0VAoPn2L-7dr12QqswhVk6m8eBHSdKndmws9RBDMUc0j7nMViUt/exec';
-    const p=new URLSearchParams(location.search);
-    const voice=p.get('voice');
-    document.getElementById('app').src=voice ? APP+'?voice='+encodeURIComponent(voice) : APP;
-  </script>
+  <main class="card">
+    <div class="brand"><img src="./icon.svg" alt="Clari Finanzas"></div>
+    <div class="eyebrow">Tus finanzas · con ritmo y claridad</div>
+    <h1>Clari Finanzas</h1>
+    <div class="sub">Tu espacio simple para ordenar el mes.</div>
+    <div class="status">Acceso directo a tu aplicación personal de ingresos y gastos.</div>
+    <button onclick="abrirClari()">ABRIR CLARI</button>
+    <div class="small">Instalá esta aplicación en la pantalla de inicio para entrar desde su propio ícono.</div>
+  </main>
+<script>
+  const APP='https://script.google.com/macros/s/AKfycbzUuwzw3ytKRSajB0VAoPn2L-7dr12QqswhVk6m8eBHSdKndmws9RBDMUc0j7nMViUt/exec';
+
+  const params=new URLSearchParams(location.search);
+  const voice=params.get('voice');
+
+  if(voice){
+    location.replace(APP+'?voice='+encodeURIComponent(voice));
+  }
+
+  function abrirClari(){
+    location.href=APP;
+  }
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
+</script>
 </body>
 </html>
