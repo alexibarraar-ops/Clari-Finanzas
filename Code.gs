@@ -546,6 +546,24 @@ function getFraseDelDia_() {
   return frases[dayKey % frases.length].FRASE;
 }
 
+
+function getTodosMovimientos(limite) {
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) return [];
+
+  const max = Math.min(Number(limite || 500), lastRow - 1);
+  const start = Math.max(2, lastRow - max + 1);
+
+  return sh.getRange(start, 1, max, 19).getDisplayValues().reverse().map(r => ({
+    id:r[0], fecha:r[1], hora:r[2], tipo:r[3],
+    monto:Number(String(r[4]).replace(/\./g,'').replace(',','.'))||0,
+    concepto:r[5], categoria:r[6], cuenta:r[7], medioPago:r[8],
+    instrumento:r[9], tipoGasto:r[10], beneficiario:r[11], nota:r[12], origen:r[13],
+    cuentaDestino:r[17], transferenciaId:r[18]
+  }));
+}
+
 function getUltimosMovimientos_(limite) {
   const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
   const lastRow = sh.getLastRow();
