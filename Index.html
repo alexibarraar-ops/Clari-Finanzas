@@ -65,6 +65,18 @@
   <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
 </div></div>
 
+<div class="sheet" id="historySheet"><div class="panel">
+  <div class="head"><h2>Todos los movimientos</h2><button class="close" onclick="closeSheet('historySheet')">×</button></div>
+  <div class="field"><label>Filtrar</label><select id="historyFilter" onchange="renderHistory()">
+    <option value="TODOS">Todos</option>
+    <option value="GASTO">Gastos</option>
+    <option value="INGRESO">Ingresos</option>
+    <option value="TRANSFERENCIA">Transferencias</option>
+    <option value="AJUSTE">Ajustes</option>
+  </select></div>
+  <div id="historyList" class="card"></div>
+</div></div>
+
 <div class="sheet" id="adjustSheet"><div class="panel">
   <div class="head"><h2>Registrar ajuste</h2><button class="close" onclick="closeSheet('adjustSheet')">×</button></div>
   <div class="sub" style="margin:8px 0 16px">Usalo solo cuando no puedas identificar el movimiento real que explica la diferencia.</div>
@@ -117,7 +129,7 @@
 
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null,editingTransferId=null;
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null,editingTransferId=null,todosMovimientos=[];
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
 function init(d){DATA=d;fraseDelDia=normalizarFrase(d.frase||'Hoy también cuenta.');render();hydrate();handleVoiceReturn()}
@@ -141,6 +153,7 @@ function render(){
  '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
  '<div class="settings-link"><button onclick="openCategorias()">⚙️ Administrar categorías</button></div>'+
  '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
+ '<div class="summary-link"><button onclick="openHistory()">Ver todos los movimientos →</button></div>'+
  '<div class="footer-note">hecho para Clari · con ritmo y claridad</div>';
 }
 
@@ -268,6 +281,29 @@ function refrescarSaldos(){
     .getSaldosCuentas();
 }
 
+
+function buscarMovimientoLocal(id){
+  return (todosMovimientos||[]).find(x=>x.id===id) || (DATA.ultimos||[]).find(x=>x.id===id) || null;
+}
+
+function openHistory(){
+  google.script.run
+    .withSuccessHandler(list=>{
+      todosMovimientos=list||[];
+      historyFilter.value='TODOS';
+      renderHistory();
+      openSheet('historySheet');
+    })
+    .withFailureHandler(x=>toast(x.message||x))
+    .getTodosMovimientos(500);
+}
+
+function renderHistory(){
+  const filtro=historyFilter.value||'TODOS';
+  const list=(todosMovimientos||[]).filter(m=>filtro==='TODOS'||String(m.tipo||'').toUpperCase()===filtro);
+  historyList.innerHTML=list.length?movs(list):'<div class="sub">No hay movimientos para este filtro.</div>';
+}
+
 function openResumen(){
   google.script.run
     .withSuccessHandler(r=>{
@@ -336,12 +372,12 @@ function movs(a){
   }).join('');
 }
 function hydrate(){fecha.value=today();cuenta.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');beneficiario.innerHTML=DATA.beneficiarios.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');transferOrigen.innerHTML=DATA.cuentas.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');transferFecha.value=today();fillTransferDestinos();fillInstrumentos();fillCategorias()}
-function setTipo(t){tipo=t;gBtn.classList.toggle('on',t==='GASTO');iBtn.classList.toggle('on',t==='INGRESO');tipoWrap.style.display=t==='GASTO'?'block':'none';benWrap.style.display=t==='GASTO'?'block':'none';fillCategorias()}
+function setTipo(t){tipo=t;gBtn.classList.toggle('on',t==='GASTO');iBtn.classList.toggle('on',t==='INGRESO');tipoWrap.style.display=t==='GASTO'?'block':'none';benWrap.style.display=t==='GASTO'?'block':'none';fillCategorias();fillInstrumentos()}
 function fillCategorias(){let list=DATA.categorias.filter(x=>x.TIPO===tipo);categoria.innerHTML=list.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');categoria.onchange=()=>{let c=list.find(x=>x.NOMBRE===categoria.value);if(c&&c.FIJO_VARIABLE_DEFAULT&&tipo==='GASTO')tipoGasto.value=c.FIJO_VARIABLE_DEFAULT};if(list.length)categoria.onchange()}
-function fillInstrumentos(){let list=DATA.instrumentos.filter(x=>x.CUENTA===cuenta.value);instWrap.style.display=list.length?'block':'none';instrumento.innerHTML=list.map(x=>'<option data-medio="'+esc(x.MEDIO_PAGO)+'">'+esc(x.INSTRUMENTO)+'</option>').join('')}
+function fillInstrumentos(){if(tipo==='INGRESO'){instWrap.style.display='none';instrumento.innerHTML='';return}let list=DATA.instrumentos.filter(x=>x.CUENTA===cuenta.value);instWrap.style.display=list.length?'block':'none';instrumento.innerHTML=list.map(x=>'<option data-medio="'+esc(x.MEDIO_PAGO)+'">'+esc(x.INSTRUMENTO)+'</option>').join('')}
 function openManual(){editingId=null;voiceRaw='';formTitle.textContent='Nuevo movimiento';saveBtn.textContent='Guardar movimiento';deleteBtn.style.display='none';monto.value='';concepto.value='';nota.value='';fecha.value=today();setTipo('GASTO');openSheet('formSheet')}
 function guardar(e){
-  let o=instrumento.options[instrumento.selectedIndex];
+  let o=tipo==='GASTO'?instrumento.options[instrumento.selectedIndex]:null;
   let p={
     id:editingId||'',
     tipo,
@@ -349,8 +385,8 @@ function guardar(e){
     concepto:concepto.value.trim(),
     categoria:categoria.value,
     cuenta:cuenta.value,
-    medioPago:o?o.dataset.medio:cuenta.value,
-    instrumento:instrumento.value||'',
+    medioPago:tipo==='INGRESO'?cuenta.value:(o?o.dataset.medio:cuenta.value),
+    instrumento:tipo==='INGRESO'?'':(instrumento.value||''),
     tipoGasto:tipo==='GASTO'?tipoGasto.value:'',
     beneficiario:tipo==='GASTO'?beneficiario.value:'Clari',
     fecha:fecha.value,
@@ -391,7 +427,7 @@ function guardar(e){
 }
 
 function editarMovimiento(id){
-  const m=(DATA.ultimos||[]).find(x=>x.id===id);
+  const m=buscarMovimientoLocal(id);
   if(!m) return toast('No encontré ese movimiento.');
 
   editingId=id;
@@ -418,6 +454,7 @@ function editarMovimiento(id){
   nota.value=m.nota||'';
   fecha.value=fechaIsoDesdeDisplay(m.fecha);
 
+  closeSheet('historySheet');
   openSheet('formSheet');
 }
 
@@ -692,7 +729,7 @@ function guardarTransferenciaUI(e){
 }
 
 function editarTransferenciaUI(id){
-  const m=(DATA.ultimos||[]).find(x=>x.id===id);
+  const m=buscarMovimientoLocal(id);
   if(!m) return toast('No encontré esa transferencia.');
 
   editingTransferId=id;
@@ -706,6 +743,7 @@ function editarTransferenciaUI(id){
   transferDestino.value=m.cuentaDestino||'';
   transferDeleteBtn.style.display='block';
   transferSaveBtn.textContent='Guardar cambios';
+  closeSheet('historySheet');
   openSheet('transferSheet');
 }
 
