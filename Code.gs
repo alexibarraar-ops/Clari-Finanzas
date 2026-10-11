@@ -7,7 +7,9 @@ const CLARI = {
     INSTRUMENTOS: 'INSTRUMENTOS',
     BENEFICIARIOS: 'BENEFICIARIOS',
     CONFIG: 'CONFIG',
-    FRASES: 'FRASES'
+    FRASES: 'FRASES',
+    TARJETAS: 'TARJETAS',
+    RESUMENES_TARJETA: 'RESUMENES_TARJETA'
   }
 };
 
@@ -30,6 +32,9 @@ function getBootstrapData() {
     resumen: getResumenMes_(),
     resumenDetallado: getResumenDetallado_(),
     saldos: getSaldosCuentas(),
+    tarjetas: getTarjetas(),
+    estadoTarjetas: getEstadoTarjetas(),
+    resumenesTarjeta: getResumenesTarjeta(),
     ultimos: getUltimosMovimientos_(6)
   };
 }
@@ -66,6 +71,342 @@ function guardarMovimiento(payload) {
 }
 
 
+
+
+function getTarjetas() {
+  return readObjects_(CLARI.SHEETS.TARJETAS)
+    .filter(r => isTrue_(r.ACTIVA))
+    .map(r => ({
+      id: String(r.ID_TARJETA || ''),
+      nombre: String(r.NOMBRE || ''),
+      banco: String(r.BANCO || ''),
+      marca: String(r.MARCA || ''),
+      ultimos4: String(r.ULTIMOS_4 || ''),
+      cuentaPagoDefault: String(r.CUENTA_PAGO_DEFAULT || '')
+    }));
+}
+
+function guardarTarjeta(payload) {
+  if (!payload) throw new Error('No se recibió la tarjeta.');
+  const nombre = String(payload.nombre || '').trim();
+  const banco = String(payload.banco || '').trim();
+  const marca = String(payload.marca || '').trim();
+  const ultimos4 = String(payload.ultimos4 || '').replace(/\D/g,'').slice(-4);
+  const cuentaPagoDefault = String(payload.cuentaPagoDefault || '').trim();
+  if (!nombre) throw new Error('Ingresá un nombre para la tarjeta.');
+
+  const sh = getSheet_(CLARI.SHEETS.TARJETAS);
+  const id = String(payload.id || '').trim();
+  const now = new Date();
+
+  if (id) {
+    const row = buscarFilaPorId_(sh, 1, id);
+    if (!row) throw new Error('No encontré la tarjeta.');
+    const creado = sh.getRange(row, 8).getValue() || now;
+    sh.getRange(row,1,1,9).setValues([[
+      id,nombre,banco,marca,ultimos4,cuentaPagoDefault,true,creado,now
+    ]]);
+  } else {
+    sh.appendRow([
+      'TC-' + Utilities.getUuid().slice(0,8).toUpperCase(),
+      nombre,banco,marca,ultimos4,cuentaPagoDefault,true,now,now
+    ]);
+  }
+  return { ok:true, tarjetas:getTarjetas() };
+}
+
+function eliminarTarjeta(id) {
+  const sh = getSheet_(CLARI.SHEETS.TARJETAS);
+  const row = buscarFilaPorId_(sh, 1, id);
+  if (!row) throw new Error('No encontré la tarjeta.');
+  sh.getRange(row,7).setValue(false);
+  sh.getRange(row,9).setValue(new Date());
+  return { ok:true, tarjetas:getTarjetas() };
+}
+
+function guardarCompraCredito(payload) {
+  if (!payload) throw new Error('No se recibió la compra.');
+  const tarjetaId = String(payload.tarjetaId || '').trim();
+  const tarjeta = getTarjetas().find(t => t.id === tarjetaId);
+  if (!tarjeta) throw new Error('Elegí una tarjeta válida.');
+  const monto = Number(payload.monto || 0);
+  if (!(monto > 0)) throw new Error('Ingresá un monto válido.');
+  const concepto = String(payload.concepto || '').trim();
+  if (!concepto) throw new Error('Ingresá un concepto.');
+  const categoria = String(payload.categoria || '').trim();
+  if (!categoria) throw new Error('Elegí una categoría.');
+
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const fecha = payload.fecha ? new Date(payload.fecha + 'T12:00:00') : now;
+  const id = 'MOV-' + Utilities.getUuid().slice(0,8).toUpperCase();
+
+  sh.appendRow([
+    id,
+    Utilities.formatDate(fecha,tz,'dd/MM/yyyy'),
+    Utilities.formatDate(now,tz,'HH:mm:ss'),
+    'GASTO',
+    monto,
+    concepto,
+    categoria,
+    tarjeta.nombre,
+    'TARJETA_CREDITO',
+    tarjeta.nombre,
+    String(payload.tipoGasto || 'VARIABLE').toUpperCase(),
+    String(payload.beneficiario || 'Clari').trim(),
+    String(payload.nota || '').trim(),
+    String(payload.origen || 'MANUAL').toUpperCase(),
+    String(payload.textoOriginal || '').trim(),
+    now,
+    now,
+    '',
+    '',
+    tarjetaId,
+    '',
+    'PENDIENTE',
+    1,
+    1,
+    monto,
+    ''
+  ]);
+
+  return {
+    ok:true,
+    id,
+    resumen:getResumenMes_(),
+    saldos:getSaldosCuentas(),
+    tarjetas:getTarjetas(),
+    resumenesTarjeta:getResumenesTarjeta(),
+    ultimos:getUltimosMovimientos_(6)
+  };
+}
+
+function guardarResumenTarjeta(payload) {
+  if (!payload) throw new Error('No se recibió el resumen.');
+  const tarjetaId = String(payload.tarjetaId || '').trim();
+  const tarjeta = getTarjetas().find(t => t.id === tarjetaId);
+  if (!tarjeta) throw new Error('Elegí una tarjeta válida.');
+  if (!payload.periodoDesde || !payload.periodoHasta) throw new Error('Completá el período del resumen.');
+  const totalResumen = Number(payload.totalResumen || 0);
+  if (!(totalResumen >= 0)) throw new Error('Ingresá el total del resumen.');
+
+  const sh = getSheet_(CLARI.SHEETS.RESUMENES_TARJETA);
+  const now = new Date();
+  const id = 'RST-' + Utilities.getUuid().slice(0,8).toUpperCase();
+  const totalApp = calcularTotalTarjetaPeriodo_(tarjetaId, payload.periodoDesde, payload.periodoHasta);
+  const diferencia = totalResumen - totalApp;
+
+  sh.appendRow([
+    id,tarjetaId,payload.periodoDesde,payload.periodoHasta,
+    payload.fechaCierre || payload.periodoHasta,
+    payload.fechaVencimiento || '',
+    totalResumen,totalApp,diferencia,
+    Math.abs(diferencia) < 0.01 ? 'LISTO_PARA_CONCILIAR' : 'EN_CONCILIACION',
+    '','',0,String(payload.nota || '').trim(),now,now
+  ]);
+
+  return { ok:true, resumenesTarjeta:getResumenesTarjeta() };
+}
+
+function getResumenesTarjeta() {
+  const tarjetas = getTarjetas();
+  const byId = {};
+  tarjetas.forEach(t => byId[t.id] = t);
+  const sh = getSheet_(CLARI.SHEETS.RESUMENES_TARJETA);
+  const rows = readObjects_(CLARI.SHEETS.RESUMENES_TARJETA);
+
+  return rows.map(r => {
+    const totalApp = calcularTotalTarjetaPeriodo_(
+      String(r.TARJETA_ID || ''),
+      String(r.PERIODO_DESDE || ''),
+      String(r.PERIODO_HASTA || '')
+    );
+    const totalResumen = parseNumero_(r.TOTAL_RESUMEN);
+    const diferencia = totalResumen - totalApp;
+    let estado = String(r.ESTADO || 'EN_CONCILIACION');
+    if (estado !== 'PAGADO' && estado !== 'CONCILIADO') {
+      estado = Math.abs(diferencia) < 0.01 ? 'LISTO_PARA_CONCILIAR' : 'EN_CONCILIACION';
+    }
+    return {
+      id:String(r.RESUMEN_ID || ''),
+      tarjetaId:String(r.TARJETA_ID || ''),
+      tarjetaNombre:(byId[String(r.TARJETA_ID || '')]||{}).nombre || String(r.TARJETA_ID || ''),
+      periodoDesde:String(r.PERIODO_DESDE || ''),
+      periodoHasta:String(r.PERIODO_HASTA || ''),
+      fechaCierre:String(r.FECHA_CIERRE_REAL || ''),
+      fechaVencimiento:String(r.FECHA_VENCIMIENTO || ''),
+      totalResumen,
+      totalApp,
+      diferencia,
+      estado,
+      fechaPago:String(r.FECHA_PAGO || ''),
+      cuentaPago:String(r.CUENTA_PAGO || ''),
+      montoPagado:parseNumero_(r.MONTO_PAGADO),
+      nota:String(r.NOTA || '')
+    };
+  }).reverse();
+}
+
+function conciliarResumenTarjeta(id) {
+  const shR = getSheet_(CLARI.SHEETS.RESUMENES_TARJETA);
+  const row = buscarFilaPorId_(shR,1,id);
+  if (!row) throw new Error('No encontré el resumen.');
+  const tarjetaId = shR.getRange(row,2).getDisplayValue();
+  const desde = shR.getRange(row,3).getDisplayValue();
+  const hasta = shR.getRange(row,4).getDisplayValue();
+  const totalResumen = Number(shR.getRange(row,7).getValue() || 0);
+  const totalApp = calcularTotalTarjetaPeriodo_(tarjetaId,desde,hasta);
+  const diferencia = totalResumen - totalApp;
+  if (Math.abs(diferencia) >= 0.01) throw new Error('Todavía hay una diferencia por conciliar.');
+
+  shR.getRange(row,8,1,3).setValues([[totalApp,0,'CONCILIADO']]);
+  shR.getRange(row,16).setValue(new Date());
+
+  const shM = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const last = shM.getLastRow();
+  if (last > 1) {
+    const vals = shM.getRange(2,1,last-1,26).getValues();
+    vals.forEach((r,i) => {
+      const fecha = parseFecha_(r[1]);
+      const fd = parseIsoFecha_(desde), fh = parseIsoFecha_(hasta);
+      if (
+        String(r[3]).toUpperCase()==='GASTO' &&
+        String(r[8]).toUpperCase()==='TARJETA_CREDITO' &&
+        String(r[19])===tarjetaId &&
+        fecha && fd && fh && fecha >= fd && fecha <= fh
+      ) {
+        shM.getRange(i+2,21).setValue(id);
+        shM.getRange(i+2,22).setValue('CONCILIADO');
+      }
+    });
+  }
+  return { ok:true, resumenesTarjeta:getResumenesTarjeta() };
+}
+
+function pagarResumenTarjeta(payload) {
+  if (!payload) throw new Error('No se recibió el pago.');
+  const resumenId = String(payload.resumenId || '').trim();
+  const shR = getSheet_(CLARI.SHEETS.RESUMENES_TARJETA);
+  const row = buscarFilaPorId_(shR,1,resumenId);
+  if (!row) throw new Error('No encontré el resumen.');
+  const estado = shR.getRange(row,10).getDisplayValue();
+  if (estado !== 'CONCILIADO') throw new Error('Primero conciliá el resumen.');
+
+  const tarjetaId = shR.getRange(row,2).getDisplayValue();
+  const tarjeta = getTarjetas().find(t => t.id===tarjetaId);
+  const total = Number(shR.getRange(row,7).getValue() || 0);
+  const monto = Number(payload.monto || total);
+  const cuenta = String(payload.cuenta || '').trim();
+  if (!cuenta) throw new Error('Elegí la cuenta de pago.');
+
+  const shM = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const fecha = payload.fecha ? new Date(payload.fecha+'T12:00:00') : now;
+  shM.appendRow([
+    'MOV-' + Utilities.getUuid().slice(0,8).toUpperCase(),
+    Utilities.formatDate(fecha,tz,'dd/MM/yyyy'),
+    Utilities.formatDate(now,tz,'HH:mm:ss'),
+    'PAGO_TARJETA',
+    monto,
+    'Pago ' + (tarjeta ? tarjeta.nombre : tarjetaId),
+    'Pago de tarjeta',
+    cuenta,
+    'PAGO_TARJETA',
+    tarjeta ? tarjeta.nombre : tarjetaId,
+    '',
+    'Clari',
+    String(payload.nota || '').trim(),
+    'MANUAL','',now,now,'','',
+    tarjetaId,resumenId,'PAGADO',1,1,monto,''
+  ]);
+
+  shR.getRange(row,10).setValue('PAGADO');
+  shR.getRange(row,11).setValue(Utilities.formatDate(fecha,tz,'dd/MM/yyyy'));
+  shR.getRange(row,12).setValue(cuenta);
+  shR.getRange(row,13).setValue(monto);
+  shR.getRange(row,16).setValue(now);
+
+  const last = shM.getLastRow();
+  if (last > 1) {
+    const vals = shM.getRange(2,1,last-1,26).getValues();
+    vals.forEach((r,i) => {
+      if (String(r[20])===resumenId && String(r[3]).toUpperCase()==='GASTO') {
+        shM.getRange(i+2,22).setValue('PAGADO');
+      }
+    });
+  }
+
+  return {
+    ok:true,
+    resumen:getResumenMes_(),
+    saldos:getSaldosCuentas(),
+    resumenesTarjeta:getResumenesTarjeta(),
+    ultimos:getUltimosMovimientos_(6)
+  };
+}
+
+function calcularTotalTarjetaPeriodo_(tarjetaId, desde, hasta) {
+  const fd = parseIsoFecha_(desde), fh = parseIsoFecha_(hasta);
+  if (!fd || !fh) return 0;
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const last = sh.getLastRow();
+  if (last <= 1) return 0;
+  let total = 0;
+  sh.getRange(2,1,last-1,26).getValues().forEach(r => {
+    const fecha = parseFecha_(r[1]);
+    if (
+      String(r[3] || '').toUpperCase()==='GASTO' &&
+      String(r[8] || '').toUpperCase()==='TARJETA_CREDITO' &&
+      String(r[19] || '')===String(tarjetaId) &&
+      fecha && fecha >= fd && fecha <= fh
+    ) total += Number(r[4] || 0);
+  });
+  return total;
+}
+
+function getEstadoTarjetas() {
+  const tarjetas = getTarjetas();
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const last = sh.getLastRow();
+  const deuda = {};
+  tarjetas.forEach(t => deuda[t.id]=0);
+  if (last > 1) {
+    sh.getRange(2,1,last-1,26).getValues().forEach(r => {
+      if (
+        String(r[3] || '').toUpperCase()==='GASTO' &&
+        String(r[8] || '').toUpperCase()==='TARJETA_CREDITO' &&
+        String(r[21] || '').toUpperCase()!=='PAGADO'
+      ) {
+        const id=String(r[19]||'');
+        if (Object.prototype.hasOwnProperty.call(deuda,id)) deuda[id]+=Number(r[4]||0);
+      }
+    });
+  }
+  return tarjetas.map(t => Object.assign({},t,{deudaPendiente:deuda[t.id]||0}));
+}
+
+function parseIsoFecha_(s) {
+  const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0);
+  return parseFecha_(s);
+}
+
+function parseNumero_(v) {
+  if (typeof v === 'number') return v;
+  const s=String(v||'').trim().replace(/\./g,'').replace(',','.');
+  return Number(s)||0;
+}
+
+function buscarFilaPorId_(sh,col,id) {
+  const last=sh.getLastRow();
+  if (last<=1) return 0;
+  const vals=sh.getRange(2,col,last-1,1).getDisplayValues();
+  const target=String(id||'').trim();
+  for(let i=0;i<vals.length;i++) if(String(vals[i][0]||'').trim()===target) return i+2;
+  return 0;
+}
 
 function validarSaldosConfigurados_() {
   const s = getSaldosCuentas();
@@ -430,7 +771,7 @@ function getSaldosCuentas() {
 
   const shMov = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
   const lastRow = shMov.getLastRow();
-  const movs = lastRow > 1 ? shMov.getRange(2, 1, lastRow - 1, 19).getValues() : [];
+  const movs = lastRow > 1 ? shMov.getRange(2, 1, lastRow - 1, 26).getValues() : [];
 
   const out = cuentas.map(c => {
     const nombre = c.NOMBRE;
@@ -448,8 +789,10 @@ function getSaldosCuentas() {
         const cuentaOrigen = String(r[7] || '').trim();
         const cuentaDestino = String(r[17] || '').trim();
 
+        const medio = String(r[8] || '').toUpperCase();
         if (tipo === 'INGRESO' && cuentaOrigen === nombre) delta += monto;
-        if (tipo === 'GASTO' && cuentaOrigen === nombre) delta -= monto;
+        if (tipo === 'GASTO' && medio !== 'TARJETA_CREDITO' && cuentaOrigen === nombre) delta -= monto;
+        if (tipo === 'PAGO_TARJETA' && cuentaOrigen === nombre) delta -= monto;
         if (tipo === 'AJUSTE' && cuentaOrigen === nombre) {
           const concepto = String(r[5] || '').toLowerCase();
           if (concepto.includes('positivo')) delta += monto;
@@ -555,12 +898,12 @@ function getTodosMovimientos(limite) {
   const max = Math.min(Number(limite || 500), lastRow - 1);
   const start = Math.max(2, lastRow - max + 1);
 
-  return sh.getRange(start, 1, max, 19).getDisplayValues().reverse().map(r => ({
+  return sh.getRange(start, 1, max, 26).getDisplayValues().reverse().map(r => ({
     id:r[0], fecha:r[1], hora:r[2], tipo:r[3],
     monto:Number(String(r[4]).replace(/\./g,'').replace(',','.'))||0,
     concepto:r[5], categoria:r[6], cuenta:r[7], medioPago:r[8],
     instrumento:r[9], tipoGasto:r[10], beneficiario:r[11], nota:r[12], origen:r[13],
-    cuentaDestino:r[17], transferenciaId:r[18]
+    cuentaDestino:r[17], transferenciaId:r[18], tarjetaId:r[19], resumenId:r[20], estadoTarjeta:r[21], cuotasTotal:r[22], cuotaNumero:r[23], montoCuota:r[24], compraGrupoId:r[25]
   }));
 }
 
@@ -570,12 +913,12 @@ function getUltimosMovimientos_(limite) {
   if (lastRow <= 1) return [];
   const count = Math.min(Number(limite || 6), lastRow - 1);
   const start = Math.max(2, lastRow - count + 1);
-  return sh.getRange(start, 1, count, 19).getDisplayValues().reverse().map(r => ({
+  return sh.getRange(start, 1, count, 26).getDisplayValues().reverse().map(r => ({
     id:r[0], fecha:r[1], hora:r[2], tipo:r[3],
     monto:Number(String(r[4]).replace(/\./g,'').replace(',','.'))||0,
     concepto:r[5], categoria:r[6], cuenta:r[7], medioPago:r[8],
     instrumento:r[9], tipoGasto:r[10], beneficiario:r[11], nota:r[12], origen:r[13],
-    cuentaDestino:r[17], transferenciaId:r[18]
+    cuentaDestino:r[17], transferenciaId:r[18], tarjetaId:r[19], resumenId:r[20], estadoTarjeta:r[21], cuotasTotal:r[22], cuotaNumero:r[23], montoCuota:r[24], compraGrupoId:r[25]
   }));
 }
 
