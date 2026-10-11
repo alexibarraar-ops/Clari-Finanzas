@@ -182,6 +182,48 @@ function guardarCompraCredito(payload) {
   };
 }
 
+
+function registrarDeudaInicialTarjeta(payload) {
+  if (!payload) throw new Error('No se recibió la deuda inicial.');
+  const tarjetaId = String(payload.tarjetaId || '').trim();
+  const tarjeta = getTarjetas().find(t => t.id === tarjetaId);
+  if (!tarjeta) throw new Error('Elegí una tarjeta válida.');
+  const monto = Number(payload.monto || 0);
+  if (!(monto > 0)) throw new Error('Ingresá un monto válido.');
+
+  const sh = getSheet_(CLARI.SHEETS.RESUMENES_TARJETA);
+  const now = new Date();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const fecha = payload.fecha ? new Date(payload.fecha + 'T12:00:00') : now;
+  const fechaIso = Utilities.formatDate(fecha, tz, 'yyyy-MM-dd');
+  const id = 'RST-' + Utilities.getUuid().slice(0,8).toUpperCase();
+
+  sh.appendRow([
+    id,
+    tarjetaId,
+    fechaIso,
+    fechaIso,
+    fechaIso,
+    payload.fechaVencimiento || '',
+    monto,
+    0,
+    0,
+    'CONCILIADO',
+    '',
+    '',
+    0,
+    String(payload.nota || 'Saldo inicial migrado').trim(),
+    now,
+    now
+  ]);
+
+  return {
+    ok:true,
+    resumenesTarjeta:getResumenesTarjeta(),
+    estadoTarjetas:getEstadoTarjetas()
+  };
+}
+
 function guardarResumenTarjeta(payload) {
   if (!payload) throw new Error('No se recibió el resumen.');
   const tarjetaId = String(payload.tarjetaId || '').trim();
@@ -368,22 +410,34 @@ function calcularTotalTarjetaPeriodo_(tarjetaId, desde, hasta) {
 
 function getEstadoTarjetas() {
   const tarjetas = getTarjetas();
-  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
-  const last = sh.getLastRow();
   const deuda = {};
   tarjetas.forEach(t => deuda[t.id]=0);
-  if (last > 1) {
-    sh.getRange(2,1,last-1,26).getValues().forEach(r => {
+
+  const shM = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastM = shM.getLastRow();
+  if (lastM > 1) {
+    shM.getRange(2,1,lastM-1,26).getValues().forEach(r => {
       if (
         String(r[3] || '').toUpperCase()==='GASTO' &&
         String(r[8] || '').toUpperCase()==='TARJETA_CREDITO' &&
-        String(r[21] || '').toUpperCase()!=='PAGADO'
+        String(r[21] || '').toUpperCase()!=='PAGADO' &&
+        !String(r[20] || '').trim()
       ) {
         const id=String(r[19]||'');
         if (Object.prototype.hasOwnProperty.call(deuda,id)) deuda[id]+=Number(r[4]||0);
       }
     });
   }
+
+  readObjects_(CLARI.SHEETS.RESUMENES_TARJETA).forEach(r => {
+    const estado=String(r.ESTADO || '').toUpperCase();
+    if (estado==='PAGADO') return;
+    const id=String(r.TARJETA_ID || '');
+    if (Object.prototype.hasOwnProperty.call(deuda,id)) {
+      deuda[id]+=parseNumero_(r.TOTAL_RESUMEN);
+    }
+  });
+
   return tarjetas.map(t => Object.assign({},t,{deudaPendiente:deuda[t.id]||0}));
 }
 
