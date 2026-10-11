@@ -72,7 +72,7 @@
     <button class="mini-btn" onclick="nuevaTarjeta()">+ Tarjeta</button>
     <button class="mini-btn" onclick="openCompraCredito()">+ Compra</button>
   </div>
-  <button class="big secondary" onclick="openNuevoResumen()">Conciliar un resumen</button>
+  <button class="big secondary" onclick="openNuevoResumen()">Conciliar un resumen</button><button class="big secondary" onclick="openDeudaInicial()">Cargar deuda inicial</button>
   <div class="section-kicker">Mis tarjetas</div>
   <div id="cardsList" class="card"></div>
   <div class="section-kicker">Resúmenes</div>
@@ -87,6 +87,18 @@
     <div class="field"><label>Cuenta habitual de pago</label><select id="cardCuentaPago"></select></div>
     <button class="big save" onclick="guardarTarjetaUI(event)">Guardar tarjeta</button>
   </div>
+</div></div>
+
+
+<div class="sheet" id="openingDebtSheet"><div class="panel">
+  <div class="head"><h2>Deuda inicial de tarjeta</h2><button class="close" onclick="closeSheet('openingDebtSheet')">×</button></div>
+  <div class="sub" style="margin:8px 0 16px">Usalo solo para empezar con una tarjeta que ya tiene saldo pendiente. No modifica los movimientos históricos.</div>
+  <div class="field"><label>Tarjeta</label><select id="openingDebtCard"></select></div>
+  <div class="field"><label>Saldo pendiente actual</label><input id="openingDebtAmount" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Fecha de referencia</label><input type="date" id="openingDebtDate"></div>
+  <div class="field"><label>Fecha de vencimiento</label><input type="date" id="openingDebtDue"></div>
+  <div class="field"><label>Nota</label><textarea id="openingDebtNote" placeholder="Ej. saldo pendiente al comenzar a usar Clari"></textarea></div>
+  <button class="big save" onclick="guardarDeudaInicialUI(event)">Guardar deuda inicial</button>
 </div></div>
 
 <div class="sheet" id="creditPurchaseSheet"><div class="panel">
@@ -293,6 +305,45 @@ function guardarTarjetaUI(e){
     google.script.run.withSuccessHandler(cards=>{DATA.estadoTarjetas=cards;render();renderTarjetasPanel();}).getEstadoTarjetas();
     toast('Tarjeta guardada.');
   }).withFailureHandler(x=>{btn.disabled=false;btn.textContent='Guardar tarjeta';toast(x.message||x)}).guardarTarjeta(p);
+}
+
+
+function openDeudaInicial(){
+  if(!(DATA.tarjetas||[]).length) return toast('Primero agregá una tarjeta.');
+  openingDebtCard.innerHTML=(DATA.tarjetas||[]).map(t=>'<option value="'+esc(t.id)+'">'+esc(t.nombre)+'</option>').join('');
+  openingDebtAmount.value='';
+  openingDebtDate.value=today();
+  openingDebtDue.value='';
+  openingDebtNote.value='Saldo pendiente al comenzar a usar Clari';
+  closeSheet('cardsSheet');
+  openSheet('openingDebtSheet');
+}
+
+function guardarDeudaInicialUI(e){
+  const p={
+    tarjetaId:openingDebtCard.value,
+    monto:parseMoney(openingDebtAmount.value),
+    fecha:openingDebtDate.value,
+    fechaVencimiento:openingDebtDue.value,
+    nota:openingDebtNote.value.trim()
+  };
+  if(!p.monto) return toast('Ingresá el saldo pendiente.');
+  const btn=e.currentTarget;btn.disabled=true;btn.textContent='Guardando…';
+  google.script.run
+    .withSuccessHandler(r=>{
+      DATA.resumenesTarjeta=r.resumenesTarjeta||[];
+      DATA.estadoTarjetas=r.estadoTarjetas||[];
+      closeSheet('openingDebtSheet');
+      btn.disabled=false;btn.textContent='Guardar deuda inicial';
+      render();
+      openTarjetas();
+      toast('Deuda inicial registrada.');
+    })
+    .withFailureHandler(x=>{
+      btn.disabled=false;btn.textContent='Guardar deuda inicial';
+      toast(x.message||x);
+    })
+    .registrarDeudaInicialTarjeta(p);
 }
 
 function openCompraCredito(){
