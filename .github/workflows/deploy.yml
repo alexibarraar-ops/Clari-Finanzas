@@ -46,7 +46,13 @@ jobs:
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
 
       - name: Verify Apps Script project
-        run: clasp status
+        run: clasp show-file-status
 
-      - name: Push to Apps Script
+      - name: Push source to Apps Script
         run: clasp push -f
+
+      - name: Update production web app deployment
+        env:
+          DEPLOYMENT_ID: "AKfycbzUuwzw3ytKRSajB0VAoPn2L-7dr12QqswhVk6m8eBHSdKndmws9RBDMUc0j7nMViUt"
+        run: |
+          clasp update-deployment "$DEPLOYMENT_ID" --description "GitHub Actions $GITHUB_SHA"
