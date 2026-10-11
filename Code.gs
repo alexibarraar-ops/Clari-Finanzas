@@ -1011,7 +1011,7 @@ function getResumenDetallado_() {
   const prevMonth = prev.getMonth();
   const prevYear = prev.getFullYear();
 
-  const categorias = {};
+  const rubros = {};
   const beneficiarios = {};
   const tipoGasto = { FIJO: 0, VARIABLE: 0 };
 
@@ -1020,7 +1020,7 @@ function getResumenDetallado_() {
   let gastosMesAnterior = 0;
 
   if (lastRow > 1) {
-    const values = sh.getRange(2, 1, lastRow - 1, 17).getValues();
+    const values = sh.getRange(2, 1, lastRow - 1, 26).getValues();
 
     values.forEach(r => {
       const fecha = parseFecha_(r[1]);
@@ -1028,17 +1028,17 @@ function getResumenDetallado_() {
 
       const tipo = String(r[3] || '').toUpperCase();
       const monto = Number(r[4] || 0);
-      const categoria = String(r[6] || 'Otros');
+      const concepto = String(r[5] || '').trim();
+      const categoria = String(r[6] || 'Otros').trim() || 'Otros';
+      const cuenta = String(r[7] || '').trim();
+      const instrumento = String(r[9] || '').trim();
       const tg = String(r[10] || '').toUpperCase();
-      const beneficiario = String(r[11] || 'Clari');
+      const beneficiario = String(r[11] || 'Clari').trim() || 'Clari';
 
       const isCurrent = fecha.getMonth() === currentMonth && fecha.getFullYear() === currentYear;
       const isPrev = fecha.getMonth() === prevMonth && fecha.getFullYear() === prevYear;
 
-      if (isPrev && tipo === 'GASTO') {
-        gastosMesAnterior += monto;
-      }
-
+      if (isPrev && tipo === 'GASTO') gastosMesAnterior += monto;
       if (!isCurrent) return;
 
       if (tipo === 'INGRESO') {
@@ -1046,20 +1046,43 @@ function getResumenDetallado_() {
         return;
       }
 
-      if (tipo === 'GASTO') {
-        gastos += monto;
-        categorias[categoria] = (categorias[categoria] || 0) + monto;
-        beneficiarios[beneficiario] = (beneficiarios[beneficiario] || 0) + monto;
+      if (tipo !== 'GASTO') return;
 
-        if (tg === 'FIJO' || tg === 'VARIABLE') {
-          tipoGasto[tg] += monto;
-        }
+      gastos += monto;
+      beneficiarios[beneficiario] = (beneficiarios[beneficiario] || 0) + monto;
+      if (tg === 'FIJO' || tg === 'VARIABLE') tipoGasto[tg] += monto;
+
+      // Para Clari, "Hija" funciona como rubro de decisión. No alteramos el
+      // movimiento histórico: sólo lo presentamos agrupado así en el resumen.
+      const rubroNombre = normalizarTexto_(beneficiario) === 'hija' ? 'Hija' : categoria;
+
+      if (!rubros[rubroNombre]) {
+        rubros[rubroNombre] = { nombre: rubroNombre, monto: 0, movimientos: [] };
       }
+
+      rubros[rubroNombre].monto += monto;
+      rubros[rubroNombre].movimientos.push({
+        id: String(r[0] || ''),
+        fecha: Utilities.formatDate(fecha, Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy'),
+        concepto: concepto || categoria,
+        monto,
+        categoria,
+        cuenta,
+        instrumento,
+        beneficiario
+      });
     });
   }
 
-  const categoriasOrdenadas = Object.keys(categorias)
-    .map(nombre => ({ nombre, monto: categorias[nombre] }))
+  const rubrosOrdenados = Object.keys(rubros)
+    .map(nombre => {
+      const item = rubros[nombre];
+      item.movimientos.sort((a,b) => {
+        const da = parseFecha_(a.fecha), db = parseFecha_(b.fecha);
+        return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+      });
+      return item;
+    })
     .sort((a,b) => b.monto - a.monto);
 
   const beneficiariosOrdenados = Object.keys(beneficiarios)
@@ -1075,7 +1098,8 @@ function getResumenDetallado_() {
     ingresos,
     gastos,
     disponible: ingresos - gastos,
-    categorias: categoriasOrdenadas,
+    rubros: rubrosOrdenados,
+    categorias: rubrosOrdenados,
     beneficiarios: beneficiariosOrdenados,
     tipoGasto,
     gastosMesAnterior,
