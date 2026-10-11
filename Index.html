@@ -65,6 +65,66 @@
   <button class="big secondary" onclick="pasarVoz()">Revisar datos</button>
 </div></div>
 
+
+<div class="sheet" id="cardsSheet"><div class="panel">
+  <div class="head"><h2>Tarjetas de crédito</h2><button class="close" onclick="closeSheet('cardsSheet')">×</button></div>
+  <div class="admin-actions">
+    <button class="mini-btn" onclick="nuevaTarjeta()">+ Tarjeta</button>
+    <button class="mini-btn" onclick="openCompraCredito()">+ Compra</button>
+  </div>
+  <button class="big secondary" onclick="openNuevoResumen()">Conciliar un resumen</button>
+  <div class="section-kicker">Mis tarjetas</div>
+  <div id="cardsList" class="card"></div>
+  <div class="section-kicker">Resúmenes</div>
+  <div id="cardSummariesList"></div>
+
+  <div id="cardEditor" class="cat-editor">
+    <div class="section-kicker" id="cardEditorTitle">Nueva tarjeta</div>
+    <div class="field"><label>Nombre</label><input id="cardNombre" placeholder="Ej. Visa Ciudad"></div>
+    <div class="field"><label>Banco</label><input id="cardBanco" placeholder="Ej. Banco Ciudad"></div>
+    <div class="field"><label>Marca</label><select id="cardMarca"><option>Visa</option><option>Mastercard</option><option>American Express</option><option>Otra</option></select></div>
+    <div class="field"><label>Últimos 4 dígitos</label><input id="cardUltimos4" inputmode="numeric" maxlength="4" placeholder="1234"></div>
+    <div class="field"><label>Cuenta habitual de pago</label><select id="cardCuentaPago"></select></div>
+    <button class="big save" onclick="guardarTarjetaUI(event)">Guardar tarjeta</button>
+  </div>
+</div></div>
+
+<div class="sheet" id="creditPurchaseSheet"><div class="panel">
+  <div class="head"><h2>Compra con crédito</h2><button class="close" onclick="closeSheet('creditPurchaseSheet')">×</button></div>
+  <div class="sub" style="margin:8px 0 16px">La compra cuenta como gasto ahora, pero no baja el saldo de una cuenta hasta que pagues el resumen.</div>
+  <div class="field"><label>Tarjeta</label><select id="creditCard"></select></div>
+  <div class="field"><label>Monto</label><input id="creditMonto" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Concepto</label><input id="creditConcepto" placeholder="Ej. supermercado"></div>
+  <div class="field"><label>Categoría</label><select id="creditCategoria"></select></div>
+  <div class="field"><label>Tipo de gasto</label><select id="creditTipoGasto"><option value="VARIABLE">Variable</option><option value="FIJO">Fijo</option></select></div>
+  <div class="field"><label>¿Para quién?</label><select id="creditBeneficiario"></select></div>
+  <div class="field"><label>Fecha de compra</label><input type="date" id="creditFecha"></div>
+  <div class="field"><label>Nota</label><textarea id="creditNota"></textarea></div>
+  <button class="big save" onclick="guardarCompraCreditoUI(event)">Guardar compra</button>
+</div></div>
+
+<div class="sheet" id="cardSummarySheet"><div class="panel">
+  <div class="head"><h2>Conciliar resumen</h2><button class="close" onclick="closeSheet('cardSummarySheet')">×</button></div>
+  <div class="field"><label>Tarjeta</label><select id="summaryCard"></select></div>
+  <div class="field"><label>Período desde</label><input type="date" id="summaryDesde"></div>
+  <div class="field"><label>Período hasta</label><input type="date" id="summaryHasta"></div>
+  <div class="field"><label>Fecha de cierre real</label><input type="date" id="summaryCierre"></div>
+  <div class="field"><label>Fecha de vencimiento</label><input type="date" id="summaryVencimiento"></div>
+  <div class="field"><label>Total del resumen</label><input id="summaryTotal" inputmode="decimal" placeholder="$ 0"></div>
+  <div class="field"><label>Nota</label><textarea id="summaryNota"></textarea></div>
+  <button class="big save" onclick="guardarResumenTarjetaUI(event)">Guardar y comparar</button>
+</div></div>
+
+<div class="sheet" id="cardPaymentSheet"><div class="panel">
+  <div class="head"><h2>Pagar resumen</h2><button class="close" onclick="closeSheet('cardPaymentSheet')">×</button></div>
+  <div id="paymentSummaryInfo" class="card"></div>
+  <div class="field"><label>Cuenta desde donde se paga</label><select id="paymentAccount"></select></div>
+  <div class="field"><label>Monto</label><input id="paymentAmount" inputmode="decimal"></div>
+  <div class="field"><label>Fecha</label><input type="date" id="paymentDate"></div>
+  <div class="field"><label>Nota</label><textarea id="paymentNote"></textarea></div>
+  <button class="big save" onclick="pagarResumenTarjetaUI(event)">Registrar pago</button>
+</div></div>
+
 <div class="sheet" id="historySheet"><div class="panel">
   <div class="head"><h2>Todos los movimientos</h2><button class="close" onclick="closeSheet('historySheet')">×</button></div>
   <div class="field"><label>Filtrar</label><select id="historyFilter" onchange="renderHistory()">
@@ -72,7 +132,7 @@
     <option value="GASTO">Gastos</option>
     <option value="INGRESO">Ingresos</option>
     <option value="TRANSFERENCIA">Transferencias</option>
-    <option value="AJUSTE">Ajustes</option>
+    <option value="AJUSTE">Ajustes</option><option value="PAGO_TARJETA">Pagos de tarjeta</option>
   </select></div>
   <div id="historyList" class="card"></div>
 </div></div>
@@ -150,6 +210,7 @@ function render(){
  '<button class="big secondary" onclick="openManual()">+ Cargar manualmente</button>'+
  '<button class="big secondary" onclick="openTransferencia()">↔ Transferir entre cuentas</button>'+
  '<div class="section-kicker">Mis cuentas</div>'+renderCuentasHome()+
+ '<div class="section-kicker">Tarjetas</div>'+renderTarjetasHome()+
  '<div class="summary-link"><button onclick="openResumen()">Ver resumen del mes →</button></div>'+
  '<div class="settings-link"><button onclick="openCategorias()">⚙️ Administrar categorías</button></div>'+
  '<div class="section-kicker">Últimos movimientos</div><div class="card">'+movs(DATA.ultimos||[])+'</div>'+
@@ -158,6 +219,147 @@ function render(){
 }
 
 
+
+
+let editingCardId=null;
+let payingSummaryId=null;
+
+function renderTarjetasHome(){
+  const cards=DATA.estadoTarjetas||[];
+  if(!cards.length){
+    return '<div class="card"><div class="sub">Todavía no hay tarjetas configuradas.</div><div class="summary-link"><button onclick="openTarjetas()">Configurar tarjetas →</button></div></div>';
+  }
+  const rows=cards.map(t=>
+    '<div class="manage-row" onclick="openTarjetas()"><div><div class="manage-main">'+esc(t.nombre)+'</div><div class="manage-meta">Pendiente: '+money(t.deudaPendiente||0)+'</div></div><div class="manage-arrow">›</div></div>'
+  ).join('');
+  return '<div class="card">'+rows+'</div><div class="summary-link"><button onclick="openTarjetas()">Ver tarjetas y resúmenes →</button></div>';
+}
+
+function openTarjetas(){
+  google.script.run
+    .withSuccessHandler(cards=>{
+      DATA.estadoTarjetas=cards||[];
+      google.script.run
+        .withSuccessHandler(rs=>{
+          DATA.resumenesTarjeta=rs||[];
+          renderTarjetasPanel();
+          openSheet('cardsSheet');
+        })
+        .withFailureHandler(x=>toast(x.message||x))
+        .getResumenesTarjeta();
+    })
+    .withFailureHandler(x=>toast(x.message||x))
+    .getEstadoTarjetas();
+}
+
+function renderTarjetasPanel(){
+  const cards=DATA.estadoTarjetas||[];
+  cardsList.innerHTML=cards.length?cards.map(t=>
+    '<div class="manage-row"><div><div class="manage-main">'+esc(t.nombre)+'</div><div class="manage-meta">'+
+    esc([t.banco,t.marca,t.ultimos4?'•••• '+t.ultimos4:''].filter(Boolean).join(' · '))+
+    '<br>Pendiente: <b>'+money(t.deudaPendiente||0)+'</b></div></div></div>'
+  ).join(''):'<div class="sub">Agregá la primera tarjeta.</div>';
+
+  const rs=DATA.resumenesTarjeta||[];
+  cardSummariesList.innerHTML=rs.length?rs.map(r=>{
+    let accion='';
+    if(r.estado==='LISTO_PARA_CONCILIAR') accion='<button class="mini-btn" onclick="conciliarResumenUI(\''+esc(r.id)+'\')">Marcar conciliado</button>';
+    if(r.estado==='CONCILIADO') accion='<button class="mini-btn" onclick="openPagoResumen(\''+esc(r.id)+'\')">Pagar resumen</button>';
+    return '<div class="card" style="margin-bottom:10px"><div class="manage-main">'+esc(r.tarjetaNombre)+'</div>'+
+      '<div class="manage-meta">'+esc(r.periodoDesde)+' → '+esc(r.periodoHasta)+' · '+esc(r.estado.replaceAll('_',' '))+'</div>'+
+      '<div class="sub" style="margin-top:8px">App: <b>'+money(r.totalApp)+'</b> · Resumen: <b>'+money(r.totalResumen)+'</b></div>'+
+      '<div class="sub">Diferencia: <b>'+money(r.diferencia)+'</b></div>'+
+      (accion?'<div style="margin-top:10px">'+accion+'</div>':'')+
+    '</div>';
+  }).join(''):'<div class="card"><div class="sub">Todavía no cargaste resúmenes.</div></div>';
+}
+
+function nuevaTarjeta(){
+  editingCardId=null;
+  cardEditor.classList.add('show');
+  cardEditorTitle.textContent='Nueva tarjeta';
+  cardNombre.value=''; cardBanco.value=''; cardUltimos4.value='';
+  cardCuentaPago.innerHTML=(DATA.cuentas||[]).map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+}
+
+function guardarTarjetaUI(e){
+  const p={id:editingCardId||'',nombre:cardNombre.value.trim(),banco:cardBanco.value.trim(),marca:cardMarca.value,ultimos4:cardUltimos4.value,cuentaPagoDefault:cardCuentaPago.value};
+  if(!p.nombre) return toast('Ingresá un nombre para la tarjeta.');
+  const btn=e.currentTarget; btn.disabled=true; btn.textContent='Guardando…';
+  google.script.run.withSuccessHandler(r=>{
+    DATA.tarjetas=r.tarjetas||[];
+    cardEditor.classList.remove('show');
+    btn.disabled=false; btn.textContent='Guardar tarjeta';
+    google.script.run.withSuccessHandler(cards=>{DATA.estadoTarjetas=cards;render();renderTarjetasPanel();}).getEstadoTarjetas();
+    toast('Tarjeta guardada.');
+  }).withFailureHandler(x=>{btn.disabled=false;btn.textContent='Guardar tarjeta';toast(x.message||x)}).guardarTarjeta(p);
+}
+
+function openCompraCredito(){
+  if(!(DATA.tarjetas||[]).length) return toast('Primero agregá una tarjeta.');
+  creditCard.innerHTML=(DATA.tarjetas||[]).map(t=>'<option value="'+esc(t.id)+'">'+esc(t.nombre)+'</option>').join('');
+  const cats=(DATA.categorias||[]).filter(x=>x.TIPO==='GASTO');
+  creditCategoria.innerHTML=cats.map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  creditBeneficiario.innerHTML=(DATA.beneficiarios||[]).map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  creditMonto.value=''; creditConcepto.value=''; creditNota.value=''; creditFecha.value=today();
+  closeSheet('cardsSheet'); openSheet('creditPurchaseSheet');
+}
+
+function guardarCompraCreditoUI(e){
+  const p={tarjetaId:creditCard.value,monto:parseMoney(creditMonto.value),concepto:creditConcepto.value.trim(),categoria:creditCategoria.value,tipoGasto:creditTipoGasto.value,beneficiario:creditBeneficiario.value,fecha:creditFecha.value,nota:creditNota.value.trim()};
+  if(!p.monto||!p.concepto) return toast('Completá monto y concepto.');
+  const btn=e.currentTarget;btn.disabled=true;btn.textContent='Guardando…';
+  google.script.run.withSuccessHandler(r=>{
+    DATA.resumen=r.resumen;DATA.saldos=r.saldos;DATA.ultimos=r.ultimos;DATA.resumenesTarjeta=r.resumenesTarjeta||[];
+    closeSheet('creditPurchaseSheet');btn.disabled=false;btn.textContent='Guardar compra';
+    google.script.run.withSuccessHandler(cards=>{DATA.estadoTarjetas=cards;render();}).getEstadoTarjetas();
+    toast('Compra con crédito registrada.');
+  }).withFailureHandler(x=>{btn.disabled=false;btn.textContent='Guardar compra';toast(x.message||x)}).guardarCompraCredito(p);
+}
+
+function openNuevoResumen(){
+  if(!(DATA.tarjetas||[]).length) return toast('Primero agregá una tarjeta.');
+  summaryCard.innerHTML=(DATA.tarjetas||[]).map(t=>'<option value="'+esc(t.id)+'">'+esc(t.nombre)+'</option>').join('');
+  summaryDesde.value='';summaryHasta.value='';summaryCierre.value='';summaryVencimiento.value='';summaryTotal.value='';summaryNota.value='';
+  closeSheet('cardsSheet');openSheet('cardSummarySheet');
+}
+
+function guardarResumenTarjetaUI(e){
+  const p={tarjetaId:summaryCard.value,periodoDesde:summaryDesde.value,periodoHasta:summaryHasta.value,fechaCierre:summaryCierre.value,fechaVencimiento:summaryVencimiento.value,totalResumen:parseMoney(summaryTotal.value),nota:summaryNota.value.trim()};
+  if(!p.periodoDesde||!p.periodoHasta) return toast('Completá el período del resumen.');
+  const btn=e.currentTarget;btn.disabled=true;btn.textContent='Comparando…';
+  google.script.run.withSuccessHandler(r=>{
+    DATA.resumenesTarjeta=r.resumenesTarjeta||[];closeSheet('cardSummarySheet');btn.disabled=false;btn.textContent='Guardar y comparar';openTarjetas();toast('Resumen comparado.');
+  }).withFailureHandler(x=>{btn.disabled=false;btn.textContent='Guardar y comparar';toast(x.message||x)}).guardarResumenTarjeta(p);
+}
+
+function conciliarResumenUI(id){
+  google.script.run.withSuccessHandler(r=>{DATA.resumenesTarjeta=r.resumenesTarjeta||[];renderTarjetasPanel();toast('Resumen conciliado.');})
+    .withFailureHandler(x=>toast(x.message||x)).conciliarResumenTarjeta(id);
+}
+
+function openPagoResumen(id){
+  const r=(DATA.resumenesTarjeta||[]).find(x=>x.id===id);
+  if(!r) return toast('No encontré el resumen.');
+  payingSummaryId=id;
+  paymentSummaryInfo.innerHTML='<b>'+esc(r.tarjetaNombre)+'</b><div class="sub">Resumen: '+money(r.totalResumen)+'</div>';
+  paymentAccount.innerHTML=(DATA.cuentas||[]).map(x=>'<option>'+esc(x.NOMBRE)+'</option>').join('');
+  const card=(DATA.tarjetas||[]).find(t=>t.id===r.tarjetaId);
+  if(card&&card.cuentaPagoDefault) paymentAccount.value=card.cuentaPagoDefault;
+  paymentAmount.value=r.totalResumen;paymentDate.value=today();paymentNote.value='';
+  closeSheet('cardsSheet');openSheet('cardPaymentSheet');
+}
+
+function pagarResumenTarjetaUI(e){
+  const p={resumenId:payingSummaryId,cuenta:paymentAccount.value,monto:parseMoney(paymentAmount.value),fecha:paymentDate.value,nota:paymentNote.value.trim()};
+  const btn=e.currentTarget;btn.disabled=true;btn.textContent='Registrando…';
+  google.script.run.withSuccessHandler(r=>{
+    DATA.resumen=r.resumen;DATA.saldos=r.saldos;DATA.resumenesTarjeta=r.resumenesTarjeta||[];DATA.ultimos=r.ultimos;
+    closeSheet('cardPaymentSheet');btn.disabled=false;btn.textContent='Registrar pago';
+    google.script.run.withSuccessHandler(cards=>{DATA.estadoTarjetas=cards;render();}).getEstadoTarjetas();
+    toast('Pago de tarjeta registrado.');
+  }).withFailureHandler(x=>{btn.disabled=false;btn.textContent='Registrar pago';toast(x.message||x)}).pagarResumenTarjeta(p);
+}
 
 function openAjusteConciliacion(){
   const s=DATA.saldos||{total:0};
@@ -367,6 +569,12 @@ function movs(a){
     if(String(m.tipo||'').toUpperCase()==='AJUSTE'){
       const positivo=String(m.concepto||'').toLowerCase().includes('positivo');
       return '<div class="mov"><div><b>Ajuste de conciliación</b><div class="sub">'+esc(m.cuenta||'')+' · '+esc(m.nota||'')+'</div></div><b>'+(positivo?'+':'-')+money(m.monto)+'</b></div>';
+    }
+    if(String(m.tipo||'').toUpperCase()==='PAGO_TARJETA'){
+      return '<div class="mov"><div><b>Pago de tarjeta</b><div class="sub">'+esc(m.cuenta||'')+' · '+esc(m.instrumento||'')+'</div></div><b>-'+money(m.monto)+'</b></div>';
+    }
+    if(String(m.medioPago||'').toUpperCase()==='TARJETA_CREDITO'){
+      return '<div class="mov"><div><b>'+esc(m.concepto||'Compra con crédito')+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.instrumento||m.cuenta||'')+'</div></div><b>-'+money(m.monto)+'</b></div>';
     }
     return '<div class="mov" onclick="editarMovimiento(\''+esc(m.id)+'\')"><div><b>'+esc(m.concepto||m.categoria)+'</b><div class="sub">'+esc(m.categoria||'')+' · '+esc(m.cuenta||'')+(m.instrumento?' · '+esc(m.instrumento):'')+'</div></div><b>'+(m.tipo==='INGRESO'?'+':'-')+money(m.monto)+'</b></div>';
   }).join('');
