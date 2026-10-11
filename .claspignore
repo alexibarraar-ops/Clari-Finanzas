@@ -1,6 +1,7 @@
 # Solo código de Apps Script
 docs/**
 scripts/**
+.github/**
 .git/**
 .gitignore
 README.md
