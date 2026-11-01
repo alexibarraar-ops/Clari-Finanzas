@@ -139,13 +139,22 @@
 
 <div class="sheet" id="historySheet"><div class="panel">
   <div class="head"><h2>Todos los movimientos</h2><button class="close" onclick="closeSheet('historySheet')">×</button></div>
-  <div class="field"><label>Filtrar</label><select id="historyFilter" onchange="renderHistory()">
-    <option value="TODOS">Todos</option>
-    <option value="GASTO">Gastos</option>
-    <option value="INGRESO">Ingresos</option>
-    <option value="TRANSFERENCIA">Transferencias</option>
-    <option value="AJUSTE">Ajustes</option><option value="PAGO_TARJETA">Pagos de tarjeta</option>
-  </select></div>
+  <div class="split">
+    <div class="field"><label>Mes</label><select id="historyMonth" onchange="renderHistory()"></select></div>
+    <div class="field"><label>Tipo</label><select id="historyFilter" onchange="renderHistory()">
+      <option value="TODOS">Todos</option>
+      <option value="GASTO">Gastos</option>
+      <option value="INGRESO">Ingresos</option>
+      <option value="TRANSFERENCIA">Transferencias</option>
+      <option value="AJUSTE">Ajustes</option>
+      <option value="PAGO_TARJETA">Pagos de tarjeta</option>
+    </select></div>
+  </div>
+  <div class="split">
+    <div class="field"><label>Categoría</label><select id="historyCategory" onchange="renderHistory()"></select></div>
+    <div class="field"><label>Cuenta</label><select id="historyAccount" onchange="renderHistory()"></select></div>
+  </div>
+  <div id="historyTotals" class="accounts-total" style="margin-bottom:10px"></div>
   <div id="historyList" class="card"></div>
 </div></div>
 
@@ -201,7 +210,7 @@
 
 <div class="notice" id="notice"></div>
 <script>
-let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null,editingTransferId=null,todosMovimientos=[];
+let DATA=null,tipo='GASTO',voiceRaw='',rec=null,listening=false,editingId=null,fraseDelDia='',editingCategoriaId=null,editingTransferId=null,todosMovimientos=[],summaryPeriodo='';
 google.script.run.withSuccessHandler(init).withFailureHandler(err=>toast(err.message||err)).getBootstrapData();
 
 function init(d){DATA=d;fraseDelDia=normalizarFrase(d.frase||'Hoy también cuenta.');render();hydrate();handleVoiceReturn()}
@@ -539,66 +548,175 @@ function buscarMovimientoLocal(id){
   return (todosMovimientos||[]).find(x=>x.id===id) || (DATA.ultimos||[]).find(x=>x.id===id) || null;
 }
 
+function mesKeyFecha(v){
+  const m=String(v||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return '';
+  return m[3]+'-'+String(m[2]).padStart(2,'0');
+}
+
+function monthLabel(key){
+  const m=String(key||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m) return 'Todos los meses';
+  const d=new Date(Number(m[1]),Number(m[2])-1,1);
+  const s=new Intl.DateTimeFormat('es-AR',{month:'long',year:'numeric'}).format(d);
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+
 function openHistory(){
   google.script.run
     .withSuccessHandler(list=>{
       todosMovimientos=list||[];
       historyFilter.value='TODOS';
+      cargarFiltrosHistorial();
       renderHistory();
       openSheet('historySheet');
     })
     .withFailureHandler(x=>toast(x.message||x))
-    .getTodosMovimientos(500);
+    .getTodosMovimientos(2000);
+}
+
+function cargarFiltrosHistorial(){
+  const meses=[...new Set((todosMovimientos||[]).map(m=>mesKeyFecha(m.fecha)).filter(Boolean))].sort().reverse();
+  historyMonth.innerHTML='<option value="TODOS">Todos los meses</option>'+meses.map(m=>'<option value="'+m+'">'+esc(monthLabel(m))+'</option>').join('');
+  const actual=today().slice(0,7);
+  if(meses.includes(actual)) historyMonth.value=actual;
+
+  const cats=[...new Set((todosMovimientos||[]).map(m=>String(m.categoria||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  historyCategory.innerHTML='<option value="TODAS">Todas</option>'+cats.map(x=>'<option>'+esc(x)+'</option>').join('');
+
+  const cuentas=[...new Set((todosMovimientos||[]).flatMap(m=>[m.cuenta,m.cuentaDestino]).map(x=>String(x||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  historyAccount.innerHTML='<option value="TODAS">Todas</option>'+cuentas.map(x=>'<option>'+esc(x)+'</option>').join('');
 }
 
 function renderHistory(){
-  const filtro=historyFilter.value||'TODOS';
-  const list=(todosMovimientos||[]).filter(m=>filtro==='TODOS'||String(m.tipo||'').toUpperCase()===filtro);
-  historyList.innerHTML=list.length?movs(list):'<div class="sub">No hay movimientos para este filtro.</div>';
+  const tipoF=historyFilter.value||'TODOS';
+  const mesF=historyMonth.value||'TODOS';
+  const catF=historyCategory.value||'TODAS';
+  const cuentaF=historyAccount.value||'TODAS';
+
+  const list=(todosMovimientos||[]).filter(m=>{
+    const tipoOk=tipoF==='TODOS'||String(m.tipo||'').toUpperCase()===tipoF;
+    const mesOk=mesF==='TODOS'||mesKeyFecha(m.fecha)===mesF;
+    const catOk=catF==='TODAS'||String(m.categoria||'')===catF;
+    const cuentaOk=cuentaF==='TODAS'||String(m.cuenta||'')===cuentaF||String(m.cuentaDestino||'')===cuentaF;
+    return tipoOk&&mesOk&&catOk&&cuentaOk;
+  });
+
+  const ingresos=list.filter(m=>String(m.tipo||'').toUpperCase()==='INGRESO').reduce((s,m)=>s+Number(m.monto||0),0);
+  const gastos=list.filter(m=>String(m.tipo||'').toUpperCase()==='GASTO').reduce((s,m)=>s+Number(m.monto||0),0);
+  historyTotals.innerHTML='<div class="label">'+esc(mesF==='TODOS'?'Movimientos filtrados':monthLabel(mesF))+'</div>'+
+    '<div class="sub" style="margin-top:6px">'+list.length+' movimientos · Ingresos <b>'+money(ingresos)+'</b> · Gastos <b>'+money(gastos)+'</b></div>';
+  historyList.innerHTML=list.length?movs(list):'<div class="sub">No hay movimientos para estos filtros.</div>';
 }
 
 function openResumen(){
   google.script.run
-    .withSuccessHandler(r=>{
-      DATA.resumenDetallado=r;
+    .withSuccessHandler(list=>{
+      todosMovimientos=list||[];
+      summaryPeriodo=today().slice(0,7);
+      DATA.resumenDetallado=calcularResumenLocal(summaryPeriodo);
       renderResumen();
       openSheet('summarySheet');
     })
     .withFailureHandler(x=>toast(x.message||x))
-    .getResumenDetallado();
+    .getTodosMovimientos(2000);
+}
+
+function cambiarPeriodoResumen(periodo){
+  summaryPeriodo=periodo||today().slice(0,7);
+  DATA.resumenDetallado=calcularResumenLocal(summaryPeriodo);
+  renderResumen();
+}
+
+function opcionesMesesResumen(seleccionado){
+  const meses=[...new Set((todosMovimientos||[]).map(m=>mesKeyFecha(m.fecha)).filter(Boolean))].sort().reverse();
+  const actual=today().slice(0,7);
+  if(!meses.includes(actual)) meses.unshift(actual);
+  return meses.map(key=>'<option value="'+key+'" '+(key===seleccionado?'selected':'')+'>'+esc(monthLabel(key))+'</option>').join('');
+}
+
+function calcularResumenLocal(periodo){
+  const [y,m]=String(periodo||today().slice(0,7)).split('-').map(Number);
+  const prev=new Date(y,m-2,1);
+  const prevKey=prev.getFullYear()+'-'+String(prev.getMonth()+1).padStart(2,'0');
+  const rubros={};
+  const tipoGasto={FIJO:0,VARIABLE:0};
+  let ingresos=0,gastos=0,ingresosPrev=0,gastosPrev=0;
+
+  (todosMovimientos||[]).forEach(x=>{
+    const key=mesKeyFecha(x.fecha);
+    const tipo=String(x.tipo||'').toUpperCase();
+    const monto=Number(x.monto||0);
+    if(key===prevKey){
+      if(tipo==='INGRESO') ingresosPrev+=monto;
+      if(tipo==='GASTO') gastosPrev+=monto;
+    }
+    if(key!==periodo) return;
+    if(tipo==='INGRESO'){ingresos+=monto;return}
+    if(tipo!=='GASTO') return;
+
+    gastos+=monto;
+    const tg=String(x.tipoGasto||'').toUpperCase();
+    if(tg==='FIJO'||tg==='VARIABLE') tipoGasto[tg]+=monto;
+
+    const rubro=norm(x.beneficiario)==='hija'?'Hija':(x.categoria||'Otros');
+    if(!rubros[rubro]) rubros[rubro]={nombre:rubro,monto:0,movimientos:[]};
+    rubros[rubro].monto+=monto;
+    rubros[rubro].movimientos.push({
+      id:x.id,fecha:x.fecha,concepto:x.concepto||x.categoria,monto:x.monto,
+      categoria:x.categoria,cuenta:x.cuenta,instrumento:x.instrumento,beneficiario:x.beneficiario
+    });
+  });
+
+  const rubrosOrdenados=Object.values(rubros).sort((a,b)=>b.monto-a.monto);
+  return {
+    periodo,
+    periodoLabel:monthLabel(periodo),
+    periodoAnterior:prevKey,
+    periodoAnteriorLabel:monthLabel(prevKey),
+    ingresos,gastos,disponible:ingresos-gastos,
+    rubros:rubrosOrdenados,categorias:rubrosOrdenados,tipoGasto,
+    ingresosMesAnterior:ingresosPrev,gastosMesAnterior:gastosPrev,
+    resultadoMesAnterior:ingresosPrev-gastosPrev
+  };
+}
+
+function compareCard(label,actual,anterior,prevLabel){
+  const dif=Number(actual||0)-Number(anterior||0);
+  const pctv=Number(anterior||0)!==0?(dif/Number(anterior))*100:null;
+  const signo=dif>0?'+':'';
+  return '<div class="pill-card"><div class="label">'+esc(label)+'</div>'+
+    '<div class="value">'+money(actual)+'</div>'+
+    '<div class="sub">'+esc(prevLabel)+': <b>'+money(anterior)+'</b></div>'+
+    '<div class="sub">Diferencia: <b>'+signo+money(dif)+'</b>'+(pctv===null?'':' · '+(pctv>0?'+':'')+pctv.toFixed(1).replace('.',',')+'%')+'</div></div>';
 }
 
 function renderResumen(){
   const r=DATA.resumenDetallado||{
     ingresos:0,gastos:0,disponible:0,rubros:[],categorias:[],
-    tipoGasto:{FIJO:0,VARIABLE:0},gastosMesAnterior:0,variacionVsAnterior:null
+    tipoGasto:{FIJO:0,VARIABLE:0},ingresosMesAnterior:0,gastosMesAnterior:0,resultadoMesAnterior:0
   };
 
   const rubros=(r.rubros&&r.rubros.length?r.rubros:(r.categorias||[]));
   const fijo=Number((r.tipoGasto||{}).FIJO||0);
   const variable=Number((r.tipoGasto||{}).VARIABLE||0);
-
-  let comp='Sin datos del mes anterior.';
-  if(r.gastosMesAnterior>0 && r.variacionVsAnterior!==null){
-    const v=Number(r.variacionVsAnterior);
-    comp='Gastaste '+Math.abs(v).toFixed(0)+'% '+(v>=0?'más':'menos')+' que el mes anterior.';
-  }
-
   const rubrosHtml=rubros.length
     ? '<div class="rubro-list">'+rubros.map((x,i)=>rubroRow(x,Number(r.gastos||0),i)).join('')+'</div>'+
       '<div class="rubro-total"><div><div class="label">Total gastos</div><div class="rubro-pct">100% del mes</div></div><div class="value">'+money(r.gastos)+'</div></div>'
-    : '<div class="sub">Todavía no hay gastos este mes.</div>';
+    : '<div class="sub">No hay gastos registrados en este mes.</div>';
 
   summaryContent.innerHTML=
-    '<div class="summary">'+
-      mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Resultado del mes',r.disponible)+
+    '<div class="field"><label>Mes a analizar</label><select onchange="cambiarPeriodoResumen(this.value)">'+opcionesMesesResumen(r.periodo||summaryPeriodo)+'</select></div>'+
+    '<div class="summary">'+mini('Ingresos',r.ingresos)+mini('Gastos',r.gastos)+mini('Resultado',r.disponible)+'</div>'+
+    '<div class="summary-section"><h3>Comparación mes a mes</h3><div class="sub" style="margin-bottom:10px">'+esc(r.periodoLabel)+' vs '+esc(r.periodoAnteriorLabel)+'</div>'+
+      '<div class="split">'+compareCard('Gastos',r.gastos,r.gastosMesAnterior,r.periodoAnteriorLabel)+compareCard('Ingresos',r.ingresos,r.ingresosMesAnterior,r.periodoAnteriorLabel)+'</div>'+
+      '<div style="margin-top:10px">'+compareCard('Resultado',r.disponible,r.resultadoMesAnterior,r.periodoAnteriorLabel)+'</div>'+
     '</div>'+
     '<div class="summary-section"><h3>¿En qué gastaste?</h3><div class="sub" style="margin-bottom:10px">Tocá cualquier rubro para ver rápidamente qué lo compone.</div>'+rubrosHtml+'</div>'+
     '<div class="summary-section"><h3>Fijos vs variables</h3><div class="split">'+
       '<div class="pill-card"><div class="label">Fijos</div><div class="value">'+money(fijo)+'</div><div class="rubro-pct">'+pct(fijo,r.gastos)+'</div></div>'+
       '<div class="pill-card"><div class="label">Variables</div><div class="value">'+money(variable)+'</div><div class="rubro-pct">'+pct(variable,r.gastos)+'</div></div>'+
-    '</div></div>'+
-    '<div class="summary-section"><h3>Comparación</h3><div class="pill-card"><div class="sub">'+esc(comp)+'</div></div></div>';
+    '</div></div>';
 }
 
 function rubroRow(x,total,i){
