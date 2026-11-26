@@ -1208,16 +1208,27 @@ function procesarColaClariIA() {
           resultado = consultarSaldoIA_(payload);
           break;
         case 'REGISTRAR_MOVIMIENTO':
-          validarMovimientoIA_(payload);
-          payload.origen = 'CHATGPT';
-          payload.textoOriginal = String(payload.textoOriginal || '');
-          resultado = guardarMovimiento(payload);
+          if (String(payload.tipo || '').toUpperCase() === 'TRANSFERENCIA') {
+            const transferencia = normalizarTransferenciaIA_(payload);
+            validarTransferenciaIA_(transferencia);
+            transferencia.origen = 'CHATGPT';
+            transferencia.textoOriginal = String(payload.textoOriginal || '');
+            resultado = guardarTransferencia(transferencia);
+          } else {
+            validarMovimientoIA_(payload);
+            payload.origen = 'CHATGPT';
+            payload.textoOriginal = String(payload.textoOriginal || '');
+            resultado = guardarMovimiento(payload);
+          }
           break;
-        case 'REGISTRAR_TRANSFERENCIA':
-          validarTransferenciaIA_(payload);
-          payload.origen = 'CHATGPT';
-          resultado = guardarTransferencia(payload);
+        case 'REGISTRAR_TRANSFERENCIA': {
+          const transferencia = normalizarTransferenciaIA_(payload);
+          validarTransferenciaIA_(transferencia);
+          transferencia.origen = 'CHATGPT';
+          transferencia.textoOriginal = String(payload.textoOriginal || '');
+          resultado = guardarTransferencia(transferencia);
           break;
+        }
         default:
           throw new Error('Acción IA no permitida: ' + accion);
       }
@@ -1325,6 +1336,19 @@ function validarMovimientoIA_(p) {
   if (!cuentas.includes(normalizarTexto_(p.cuenta))) {
     throw new Error('La cuenta no existe o no está activa.');
   }
+}
+
+function normalizarTransferenciaIA_(p) {
+  p = p || {};
+  return {
+    monto: Number(p.monto || 0),
+    cuentaOrigen: String(p.cuentaOrigen || p.cuenta || '').trim(),
+    cuentaDestino: String(p.cuentaDestino || '').trim(),
+    fecha: String(p.fecha || '').trim(),
+    nota: String(p.nota || '').trim(),
+    origen: String(p.origen || 'CHATGPT').toUpperCase(),
+    textoOriginal: String(p.textoOriginal || '').trim()
+  };
 }
 
 function validarTransferenciaIA_(p) {
