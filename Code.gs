@@ -9,11 +9,23 @@ const CLARI = {
     CONFIG: 'CONFIG',
     FRASES: 'FRASES',
     TARJETAS: 'TARJETAS',
-    RESUMENES_TARJETA: 'RESUMENES_TARJETA'
+    RESUMENES_TARJETA: 'RESUMENES_TARJETA',
+    IA_COLA: 'CLARI_IA_COLA',
+    IA_LOG: 'CLARI_IA_LOG'
   }
 };
 
-function doGet() {
+function doGet(e) {
+  if (e && e.parameter && e.parameter.ia === 'poc_process') {
+    const out = procesarSolicitudClariIAWeb_(
+      String(e.parameter.rid || ''),
+      String(e.parameter.token || '')
+    );
+    return ContentService
+      .createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Clari Finanzas')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -1143,4 +1155,310 @@ function parseFecha_(value) {
   if (m) return new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), 12,0,0);
   const d = new Date(s);
   return isNaN(d) ? null : d;
+}
+
+
+/* =========================================================
+   SECRETARIA VIRTUAL · PRUEBA DE CONCEPTO
+   Rama: clari-ia-secretaria-poc
+   La cola es la única entrada permitida para operaciones IA.
+   ========================================================= */
+
+function procesarColaClariIA() {
+  const sh = getSheet_(CLARI.SHEETS.IA_COLA);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) return { ok:true, procesadas:0 };
+
+  const values = sh.getRange(2, 1, lastRow - 1, 12).getValues();
+  let procesadas = 0;
+
+  values.forEach((r, i) => {
+    const row = i + 2;
+    const requestId = String(r[0] || '').trim();
+    const accion = String(r[3] || '').trim().toUpperCase();
+    const payloadRaw = String(r[4] || '').trim();
+    const confirmado = String(r[5] || '').toUpperCase() === 'TRUE';
+    const estado = String(r[6] || '').trim().toUpperCase();
+
+    if (!requestId || !accion) return;
+    if (['PROCESADO','ERROR','RECHAZADO'].includes(estado)) return;
+
+    try {
+      const previo = buscarResultadoIA_(requestId);
+      if (previo) {
+        finalizarFilaIA_(sh, row, 'PROCESADO', previo.resultadoJson, '', previo.procesadoEn || new Date());
+        return;
+      }
+
+      const payload = payloadRaw ? JSON.parse(payloadRaw) : {};
+      const esEscritura = ['REGISTRAR_MOVIMIENTO','REGISTRAR_TRANSFERENCIA'].includes(accion);
+
+      if (esEscritura && !confirmado) {
+        finalizarFilaIA_(sh, row, 'RECHAZADO', '', 'Falta confirmación explícita.', new Date());
+        registrarLogIA_(requestId, accion, payloadRaw, 'RECHAZADO', '', 'Falta confirmación explícita.');
+        return;
+      }
+
+      let resultado;
+      switch (accion) {
+        case 'CONSULTAR_GASTOS':
+          resultado = consultarGastosIA_(payload);
+          break;
+        case 'CONSULTAR_SALDO':
+          resultado = consultarSaldoIA_(payload);
+          break;
+        case 'REGISTRAR_MOVIMIENTO':
+          validarMovimientoIA_(payload);
+          payload.origen = 'CHATGPT';
+          payload.textoOriginal = String(payload.textoOriginal || '');
+          resultado = guardarMovimiento(payload);
+          break;
+        case 'REGISTRAR_TRANSFERENCIA':
+          validarTransferenciaIA_(payload);
+          payload.origen = 'CHATGPT';
+          resultado = guardarTransferencia(payload);
+          break;
+        default:
+          throw new Error('Acción IA no permitida: ' + accion);
+      }
+
+      const resultadoJson = JSON.stringify(resultado);
+      finalizarFilaIA_(sh, row, 'PROCESADO', resultadoJson, '', new Date());
+      registrarLogIA_(requestId, accion, payloadRaw, 'PROCESADO', resultadoJson, '');
+      procesadas++;
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      finalizarFilaIA_(sh, row, 'ERROR', '', msg, new Date());
+      registrarLogIA_(requestId, accion, payloadRaw, 'ERROR', '', msg);
+    }
+  });
+
+  return { ok:true, procesadas };
+}
+
+function consultarGastosIA_(payload) {
+  payload = payload || {};
+  const sh = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+  const lastRow = sh.getLastRow();
+  const tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  const periodo = resolverPeriodoIA_(payload.periodo);
+  const categoriaBuscada = normalizarTexto_(payload.categoria || '');
+  const conceptoBuscado = normalizarTexto_(payload.concepto || '');
+  let total = 0;
+  const movimientos = [];
+
+  if (lastRow > 1) {
+    sh.getRange(2,1,lastRow-1,26).getValues().forEach(r => {
+      const fecha = parseFecha_(r[1]);
+      if (!fecha || String(r[3] || '').toUpperCase() !== 'GASTO') return;
+      if (fecha.getFullYear() !== periodo.year || fecha.getMonth() !== periodo.month) return;
+
+      const categoria = String(r[6] || '').trim();
+      const concepto = String(r[5] || '').trim();
+      const categoriaNorm = normalizarTexto_(categoria);
+      const conceptoNorm = normalizarTexto_(concepto);
+
+      if (categoriaBuscada && categoriaNorm !== categoriaBuscada && !conceptoNorm.includes(categoriaBuscada)) return;
+      if (conceptoBuscado && !conceptoNorm.includes(conceptoBuscado) && !categoriaNorm.includes(conceptoBuscado)) return;
+
+      const monto = Number(r[4] || 0);
+      total += monto;
+      movimientos.push({
+        id:String(r[0] || ''),
+        fecha:Utilities.formatDate(fecha,tz,'dd/MM/yyyy'),
+        concepto,
+        categoria,
+        cuenta:String(r[7] || ''),
+        monto
+      });
+    });
+  }
+
+  movimientos.sort((a,b) => b.monto - a.monto);
+  return {
+    ok:true,
+    accion:'CONSULTAR_GASTOS',
+    periodo:periodo.key,
+    categoria:String(payload.categoria || ''),
+    concepto:String(payload.concepto || ''),
+    total,
+    cantidad:movimientos.length,
+    movimientos:movimientos.slice(0,50)
+  };
+}
+
+function consultarSaldoIA_(payload) {
+  payload = payload || {};
+  const cuentaBuscada = normalizarTexto_(payload.cuenta || '');
+  if (!cuentaBuscada) throw new Error('Indicá la cuenta a consultar.');
+
+  const saldos = getSaldosCuentas();
+  const cuenta = saldos.cuentas.find(c => normalizarTexto_(c.nombre) === cuentaBuscada);
+  if (!cuenta) throw new Error('La cuenta indicada no existe o no está activa.');
+
+  return {
+    ok:true,
+    accion:'CONSULTAR_SALDO',
+    cuenta:cuenta.nombre,
+    saldoActual:Number(cuenta.saldoActual || 0),
+    configurada:!!cuenta.configurada,
+    corteEn:cuenta.corteEn || ''
+  };
+}
+
+function validarMovimientoIA_(p) {
+  if (!p) throw new Error('No se recibió el movimiento.');
+  validarMovimiento_(p);
+
+  const tipo = String(p.tipo || '').toUpperCase();
+  const categorias = readObjects_(CLARI.SHEETS.CATEGORIAS)
+    .filter(r => isTrue_(r.ACTIVA) && String(r.TIPO || '').toUpperCase() === tipo)
+    .map(r => normalizarTexto_(r.NOMBRE));
+
+  const cuentas = readObjects_(CLARI.SHEETS.CUENTAS)
+    .filter(r => isTrue_(r.ACTIVA))
+    .map(r => normalizarTexto_(r.NOMBRE));
+
+  if (!categorias.includes(normalizarTexto_(p.categoria))) {
+    throw new Error('La categoría no existe o no está activa.');
+  }
+  if (!cuentas.includes(normalizarTexto_(p.cuenta))) {
+    throw new Error('La cuenta no existe o no está activa.');
+  }
+}
+
+function validarTransferenciaIA_(p) {
+  validarTransferencia_(p);
+}
+
+function resolverPeriodoIA_(periodo) {
+  const now = new Date();
+  const s = normalizarTexto_(periodo || 'este mes');
+
+  if (!s || s === 'este mes' || s === 'actual') {
+    return {year:now.getFullYear(), month:now.getMonth(), key:Utilities.formatDate(now, Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires', 'yyyy-MM')};
+  }
+
+  if (s === 'mes pasado' || s === 'el mes pasado' || s === 'anterior') {
+    const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    return {year:d.getFullYear(), month:d.getMonth(), key:Utilities.formatDate(d, Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires', 'yyyy-MM')};
+  }
+
+  const m = String(periodo || '').match(/^(\d{4})-(\d{2})$/);
+  if (m) {
+    const y = Number(m[1]), mo = Number(m[2])-1;
+    if (mo < 0 || mo > 11) throw new Error('Período inválido.');
+    return {year:y, month:mo, key:m[1]+'-'+m[2]};
+  }
+
+  throw new Error('Período no reconocido. Usá este mes, mes pasado o AAAA-MM.');
+}
+
+function buscarResultadoIA_(requestId) {
+  const sh = getSheet_(CLARI.SHEETS.IA_LOG);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) return null;
+  const rows = sh.getRange(2,1,lastRow-1,12).getDisplayValues();
+
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][0] || '').trim() === String(requestId || '').trim() &&
+        String(rows[i][6] || '').toUpperCase() === 'PROCESADO') {
+      return {
+        resultadoJson:String(rows[i][7] || ''),
+        procesadoEn:rows[i][9] || ''
+      };
+    }
+  }
+  return null;
+}
+
+function finalizarFilaIA_(sh, row, estado, resultadoJson, error, procesadoEn) {
+  sh.getRange(row,7,1,4).setValues([[
+    estado,
+    resultadoJson || '',
+    error || '',
+    procesadoEn || new Date()
+  ]]);
+}
+
+function registrarLogIA_(requestId, accion, payloadJson, estado, resultadoJson, error) {
+  const sh = getSheet_(CLARI.SHEETS.IA_LOG);
+  const now = new Date();
+  sh.appendRow([
+    requestId,
+    now,
+    'CHATGPT',
+    accion,
+    payloadJson || '',
+    '',
+    estado,
+    resultadoJson || '',
+    error || '',
+    now,
+    'CLARI_CHATGPT',
+    'POC-1'
+  ]);
+}
+
+function instalarTriggerClariIA() {
+  const handler = 'procesarColaClariIA';
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === handler) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger(handler).timeBased().everyMinutes(1).create();
+  return {ok:true, trigger:handler, intervaloMinutos:1};
+}
+
+
+function procesarSolicitudClariIAWeb_(requestId, token) {
+  if (!requestId || !token) throw new Error('Solicitud IA incompleta.');
+
+  const sh = getSheet_(CLARI.SHEETS.IA_COLA);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) throw new Error('No hay solicitudes IA.');
+
+  const rows = sh.getRange(2,1,lastRow-1,13).getValues();
+  let rowIndex = -1;
+  for (let i=0; i<rows.length; i++) {
+    if (String(rows[i][0] || '').trim() === requestId) {
+      rowIndex = i;
+      break;
+    }
+  }
+  if (rowIndex < 0) throw new Error('Solicitud IA no encontrada.');
+
+  const row = rows[rowIndex];
+  const storedToken = String(row[12] || '').trim();
+  if (!storedToken || storedToken !== token) throw new Error('Token IA inválido.');
+
+  const confirmado = String(row[5] || '').toUpperCase() === 'TRUE';
+  const estado = String(row[6] || '').toUpperCase();
+  if (!confirmado) throw new Error('La solicitud no está confirmada.');
+
+  if (estado === 'PROCESADO') {
+    return {
+      ok:true,
+      duplicate:true,
+      requestId,
+      resultado: row[7] ? JSON.parse(String(row[7])) : null
+    };
+  }
+  if (['ERROR','RECHAZADO'].includes(estado)) {
+    throw new Error(String(row[8] || 'La solicitud no puede procesarse.'));
+  }
+
+  procesarColaClariIA();
+
+  const refreshed = sh.getRange(rowIndex + 2,1,1,13).getDisplayValues()[0];
+  const refreshedState = String(refreshed[6] || '').toUpperCase();
+  if (refreshedState !== 'PROCESADO') {
+    throw new Error(String(refreshed[8] || 'La solicitud no pudo procesarse.'));
+  }
+
+  return {
+    ok:true,
+    duplicate:false,
+    requestId,
+    resultado: refreshed[7] ? JSON.parse(String(refreshed[7])) : null
+  };
 }
