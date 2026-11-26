@@ -1191,7 +1191,7 @@ function procesarColaClariIA() {
       }
 
       const payload = payloadRaw ? JSON.parse(payloadRaw) : {};
-      const esEscritura = ['REGISTRAR_MOVIMIENTO','REGISTRAR_TRANSFERENCIA'].includes(accion);
+      const esEscritura = ['REGISTRAR_MOVIMIENTO','REGISTRAR_TRANSFERENCIA','ANULAR_MOVIMIENTO'].includes(accion);
 
       if (esEscritura && !confirmado) {
         finalizarFilaIA_(sh, row, 'RECHAZADO', '', 'Falta confirmación explícita.', new Date());
@@ -1227,6 +1227,18 @@ function procesarColaClariIA() {
           transferencia.origen = 'CHATGPT';
           transferencia.textoOriginal = String(payload.textoOriginal || '');
           resultado = guardarTransferencia(transferencia);
+          break;
+        }
+        case 'ANULAR_MOVIMIENTO': {
+          const id = String(payload.id || '').trim();
+          if (!/^MOV-[A-Z0-9]+$/.test(id)) throw new Error('ID de movimiento inválido.');
+          const shMov = getSheet_(CLARI.SHEETS.MOVIMIENTOS);
+          const filaMov = buscarFilaMovimiento_(id);
+          if (!filaMov) throw new Error('No existe el movimiento a anular: ' + id);
+          const origen = String(shMov.getRange(filaMov, 14).getDisplayValue() || '').trim().toUpperCase();
+          if (origen !== 'CHATGPT') throw new Error('Solo se pueden anular movimientos originados en CHATGPT.');
+          resultado = eliminarMovimiento(id);
+          resultado.accion = 'ANULAR_MOVIMIENTO';
           break;
         }
         default:
