@@ -1413,6 +1413,8 @@ function instalarTriggerClariIA() {
 function procesarSolicitudClariIAWeb_(requestId, token) {
   if (!requestId || !token) throw new Error('Solicitud IA incompleta.');
 
+  asegurarTriggerClariIA();
+
   const sh = getSheet_(CLARI.SHEETS.IA_COLA);
   const lastRow = sh.getLastRow();
   if (lastRow <= 1) throw new Error('No hay solicitudes IA.');
@@ -1460,5 +1462,30 @@ function procesarSolicitudClariIAWeb_(requestId, token) {
     duplicate:false,
     requestId,
     resultado: refreshed[7] ? JSON.parse(String(refreshed[7])) : null
+  };
+}
+
+
+function asegurarTriggerClariIA() {
+  const handler = 'procesarColaClariIA';
+  const triggers = ScriptApp.getProjectTriggers();
+  const existentes = triggers.filter(t => t.getHandlerFunction() === handler);
+
+  if (!existentes.length) {
+    ScriptApp.newTrigger(handler).timeBased().everyMinutes(1).create();
+  } else if (existentes.length > 1) {
+    existentes.slice(1).forEach(t => ScriptApp.deleteTrigger(t));
+  }
+
+  return { ok:true, handler, activos:Math.max(1, existentes.length ? 1 : 0) };
+}
+
+function instalarSecretariaClariIA() {
+  const trigger = asegurarTriggerClariIA();
+  return {
+    ok:true,
+    trigger,
+    cola:CLARI.SHEETS.IA_COLA,
+    log:CLARI.SHEETS.IA_LOG
   };
 }
