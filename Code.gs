@@ -15,7 +15,17 @@ const CLARI = {
   }
 };
 
-function doGet() {
+function doGet(e) {
+  if (e && e.parameter && e.parameter.ia === 'poc_process') {
+    const out = procesarSolicitudClariIAWeb_(
+      String(e.parameter.rid || ''),
+      String(e.parameter.token || '')
+    );
+    return ContentService
+      .createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Clari Finanzas')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -1397,4 +1407,58 @@ function instalarTriggerClariIA() {
   });
   ScriptApp.newTrigger(handler).timeBased().everyMinutes(1).create();
   return {ok:true, trigger:handler, intervaloMinutos:1};
+}
+
+
+function procesarSolicitudClariIAWeb_(requestId, token) {
+  if (!requestId || !token) throw new Error('Solicitud IA incompleta.');
+
+  const sh = getSheet_(CLARI.SHEETS.IA_COLA);
+  const lastRow = sh.getLastRow();
+  if (lastRow <= 1) throw new Error('No hay solicitudes IA.');
+
+  const rows = sh.getRange(2,1,lastRow-1,13).getValues();
+  let rowIndex = -1;
+  for (let i=0; i<rows.length; i++) {
+    if (String(rows[i][0] || '').trim() === requestId) {
+      rowIndex = i;
+      break;
+    }
+  }
+  if (rowIndex < 0) throw new Error('Solicitud IA no encontrada.');
+
+  const row = rows[rowIndex];
+  const storedToken = String(row[12] || '').trim();
+  if (!storedToken || storedToken !== token) throw new Error('Token IA inválido.');
+
+  const confirmado = String(row[5] || '').toUpperCase() === 'TRUE';
+  const estado = String(row[6] || '').toUpperCase();
+  if (!confirmado) throw new Error('La solicitud no está confirmada.');
+
+  if (estado === 'PROCESADO') {
+    return {
+      ok:true,
+      duplicate:true,
+      requestId,
+      resultado: row[7] ? JSON.parse(String(row[7])) : null
+    };
+  }
+  if (['ERROR','RECHAZADO'].includes(estado)) {
+    throw new Error(String(row[8] || 'La solicitud no puede procesarse.'));
+  }
+
+  procesarColaClariIA();
+
+  const refreshed = sh.getRange(rowIndex + 2,1,1,13).getDisplayValues()[0];
+  const refreshedState = String(refreshed[6] || '').toUpperCase();
+  if (refreshedState !== 'PROCESADO') {
+    throw new Error(String(refreshed[8] || 'La solicitud no pudo procesarse.'));
+  }
+
+  return {
+    ok:true,
+    duplicate:false,
+    requestId,
+    resultado: refreshed[7] ? JSON.parse(String(refreshed[7])) : null
+  };
 }
